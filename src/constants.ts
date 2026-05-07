@@ -2,58 +2,47 @@ import { WorkoutDay } from './types';
 
 export const INITIAL_WORKOUTS: WorkoutDay[] = [
   {
-    id: 'upper-1',
-    title: 'Superior 1',
-    dayName: 'Segunda-feira',
+    id: 'fb-a',
+    title: 'Full Body - Estímulo A',
+    dayName: 'Sessão 1',
     exercises: [
-      { id: 'u1-1', name: 'Remada Curvada', targetReps: 6, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u1-2', name: 'Supino Inclinado Máquina', targetReps: 8, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u1-3', name: 'Puxada Alta Triângulo', targetReps: 8, increment: 5, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u1-4', name: 'Crucifixo', targetReps: 10, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u1-5', name: 'Tríceps Francês', targetReps: 10, increment: 1, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u1-6', name: 'Rosca Scott', targetReps: 8, increment: 1, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u1-7', name: 'Elevação Lateral Polia', targetReps: 12, increment: 1, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'a1', name: 'Agachamento Livre', targetReps: 6, increment: 4, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'a2', name: 'Supino Reto', targetReps: 6, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'a3', name: 'Remada Curvada', targetReps: 8, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'a4', name: 'Desenvolvimento Halter', targetReps: 10, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
     ]
   },
   {
-    id: 'lower-1',
-    title: 'Inferior 1',
-    dayName: 'Terça-feira',
+    id: 'fb-b',
+    title: 'Full Body - Estímulo B',
+    dayName: 'Sessão 2',
     exercises: [
-      { id: 'l1-1', name: 'Stiff', targetReps: 8, increment: 4, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l1-2', name: 'Leg Press 45°', targetReps: 8, increment: 10, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l1-3', name: 'Mesa Flexora', targetReps: 10, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l1-4', name: 'Extensora Unilateral', targetReps: 10, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l1-5', name: 'Cadeira Abdutora', targetReps: 12, increment: 5, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l1-6', name: 'Panturrilha Smith', targetReps: 10, increment: 5, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'b1', name: 'Leg Press 45°', targetReps: 10, increment: 10, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'b2', name: 'Supino Inclinado Máquina', targetReps: 8, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'b3', name: 'Puxada Alta Unilateral', targetReps: 10, increment: 5, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'b4', name: 'Elevação Lateral', targetReps: 12, increment: 1, lastWeight: 0, lastReps: 0, prWeight: 0 },
     ]
   },
   {
-    id: 'upper-2',
-    title: 'Superior 2',
-    dayName: 'Quinta-feira',
+    id: 'fb-c',
+    title: 'Full Body - Estímulo C',
+    dayName: 'Sessão 3',
     exercises: [
-      { id: 'u2-1', name: 'Supino Reto', targetReps: 6, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u2-2', name: 'Puxada Alta', targetReps: 8, increment: 5, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u2-3', name: 'Remada Baixa Unilateral', targetReps: 8, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u2-4', name: 'Crossover Polia Alta', targetReps: 10, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u2-5', name: 'Tríceps Pulley', targetReps: 10, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u2-6', name: 'Rosca Banco Inclinado', targetReps: 10, increment: 1, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'u2-7', name: 'Elevação Lateral Halteres', targetReps: 12, increment: 1, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'c1', name: 'Stiff (Posterior)', targetReps: 8, increment: 4, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'c2', name: 'Paralelas / Mergulho', targetReps: 8, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'c3', name: 'Remada Baixa', targetReps: 8, increment: 5, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'c4', name: 'Rosca Direta Polia', targetReps: 10, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
     ]
   },
   {
-    id: 'lower-2',
-    title: 'Inferior 2',
-    dayName: 'Sexta-feira',
+    id: 'fb-d',
+    title: 'Full Body - Estímulo D',
+    dayName: 'Sessão 4',
     exercises: [
-      { id: 'l2-1', name: 'Agachamento Livre', targetReps: 6, increment: 4, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l2-2', name: 'Elevação Pélvica', targetReps: 8, increment: 10, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l2-3', name: 'Cadeira Flexora Unilateral', targetReps: 10, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l2-4', name: 'Mesa Flexora', targetReps: 10, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l2-5', name: 'Extensora Unilateral', targetReps: 10, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l2-6', name: 'Cadeira Adutora', targetReps: 12, increment: 5, lastWeight: 0, lastReps: 0, prWeight: 0 },
-      { id: 'l2-7', name: 'Panturrilha Smith', targetReps: 10, increment: 5, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'd1', name: 'Cadeira Extensora', targetReps: 12, increment: 5, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'd2', name: 'Crossover Polia Alta', targetReps: 12, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'd3', name: 'Barra Fixa / Graviton', targetReps: 8, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
+      { id: 'd4', name: 'Tríceps Pulley', targetReps: 12, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
     ]
   }
 ];

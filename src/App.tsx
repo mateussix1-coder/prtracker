@@ -1,12 +1,12 @@
 import { useState, useEffect, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { GoogleGenAI } from "@google/genai";
-import { Trophy, Dumbbell, History, ChevronRight, CheckCircle2, Zap, Flame, Save, Calendar, Download, Upload, RotateCcw, Sparkles, AlertTriangle, ArrowUpCircle, X, Target, Edit2, Trash2, Plus, LogOut, LogIn } from "lucide-react";
+import { Trophy, Dumbbell, History, ChevronRight, CheckCircle2, Zap, Flame, Save, Calendar, Download, Upload, RotateCcw, Sparkles, AlertTriangle, ArrowUpCircle, X, Target, Edit2, Trash2, Plus, LogOut, LogIn, Minus } from "lucide-react";
 import { INITIAL_WORKOUTS } from "./constants";
 import { WorkoutDay, ExerciseSet, TrainingSession, Exercise } from "./types";
 import { auth, db } from "./firebase";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from "firebase/auth";
-import { collection, doc, setDoc, getDocs, getDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, setDoc, getDocs, getDoc, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 
 enum OperationType {
   CREATE = 'create',
@@ -365,6 +365,49 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("pr_tracker_session", JSON.stringify(currentSession));
   }, [currentSession]);
+
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetToFullBody = async () => {
+    try {
+      // 1. Local data update
+      setWorkouts(INITIAL_WORKOUTS);
+      localStorage.setItem("pr_tracker_workouts", JSON.stringify(INITIAL_WORKOUTS));
+
+      // 2. Firestore data update if logged in
+      if (user) {
+        const wPath = `users/${user.uid}/workouts`;
+        const snapshot = await getDocs(collection(db, wPath));
+        
+        // Use batch for efficiency
+        const batch = writeBatch(db);
+        
+        // Delete old workouts
+        snapshot.docs.forEach((d) => {
+          batch.delete(d.ref);
+        });
+        
+        // Add new full body workouts
+        for (const w of INITIAL_WORKOUTS) {
+          const newDocRef = doc(db, wPath, w.id);
+          batch.set(newDocRef, { 
+            ...w, 
+            userId: user.uid, 
+            createdAt: serverTimestamp(), 
+            updatedAt: serverTimestamp() 
+          });
+        }
+        
+        await batch.commit();
+      }
+      
+      setIsResetting(false);
+      // We don't use alert to follow guidelines, just visual feedback
+    } catch (e) {
+      console.error("Erro ao resetar treinos", e);
+      setIsResetting(false);
+    }
+  };
 
   const startWorkout = (workout: WorkoutDay) => {
     setActiveWorkoutId(workout.id);
@@ -822,7 +865,7 @@ export default function App() {
             </header>
 
             <motion.div
-              className="grid grid-cols-1 gap-6"
+              className="grid grid-cols-1 gap-3"
               variants={{
                 show: { transition: { staggerChildren: 0.1 } },
               }}
@@ -833,52 +876,49 @@ export default function App() {
                 <motion.div
                   key={workout.id}
                   variants={{
-                    hidden: { opacity: 0, y: 20 },
+                    hidden: { opacity: 0, y: 10 },
                     show: { opacity: 1, y: 0 },
                   }}
-                  whileHover={{ y: -4 }}
+                  whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => startWorkout(workout)}
                   role="button"
                   tabIndex={0}
-                  className="glass-card p-8 text-left hover:border-brand-primary/30 transition-all group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-brand-primary/50 cursor-pointer text-left block w-full"
+                  className="glass-card p-4 flex items-center gap-4 text-left hover:border-brand-primary/30 transition-all group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-brand-primary/50 cursor-pointer w-full"
                 >
-                  <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity rotate-12">
-                    <Dumbbell size={120} weight="fill" />
+                  <div className="shrink-0 relative z-10">
+                     <div className="w-12 h-12 bg-zinc-900 rounded-2xl flex items-center justify-center text-brand-primary border border-zinc-800 transition-colors group-hover:border-brand-primary/30">
+                        <Dumbbell size={24} />
+                     </div>
                   </div>
-                  <div className="absolute top-4 right-4 z-20">
+                  <div className="flex-1 min-w-0 relative z-10">
+                    <span className="text-[9px] font-black text-brand-primary uppercase tracking-[0.2em] block mb-0.5">
+                      {workout.dayName}
+                    </span>
+                    <h3 className="text-xl font-black italic tracking-tight truncate uppercase leading-none">
+                      {workout.title}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Zap size={10} className="text-amber-500" fill="currentColor" />
+                      <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                        {workout.exercises.length} EXERCÍCIOS
+                      </p>
+                    </div>
+                  </div>
+                  <div className="relative z-20 flex flex-col gap-2">
                     <button
                       onClick={(e) => {
                          e.stopPropagation();
                          setEditingWorkout(workout);
                       }}
-                      className="p-2 rounded-full bg-zinc-900/80 border border-zinc-800 text-zinc-400 hover:text-brand-primary hover:bg-black transition-colors"
+                      className="p-2 rounded-xl bg-zinc-900/80 border border-zinc-800 text-zinc-500 hover:text-brand-primary hover:bg-black transition-colors"
                     >
                        <Edit2 size={16} />
                     </button>
+                    <ChevronRight size={16} className="text-zinc-800 group-hover:text-brand-primary transition-colors ml-auto mr-1" />
                   </div>
-                  <div className="relative z-10">
-                    <span className="text-[10px] font-black text-brand-primary uppercase tracking-[0.2em] block mb-2">
-                      {workout.dayName}
-                    </span>
-                    <h3 className="text-3xl font-black italic tracking-tight group-hover:translate-x-1 transition-transform">
-                      {workout.title}
-                    </h3>
-                    <div className="flex items-center gap-4 mt-6">
-                      <div className="flex -space-x-2">
-                        {[1, 2, 3].map((i) => (
-                          <div
-                            key={i}
-                            className="w-6 h-6 rounded-full border-2 border-zinc-900 bg-zinc-800 flex items-center justify-center"
-                          >
-                            <Zap size={10} className="text-zinc-500" />
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                        {workout.exercises.length} EXERCÍCIOS
-                      </p>
-                    </div>
+                  <div className="absolute top-0 right-0 p-8 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity rotate-12 pointer-events-none">
+                    <Dumbbell size={100} weight="fill" />
                   </div>
                 </motion.div>
               ))}
@@ -888,27 +928,54 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8 }}
-              className="mt-12 flex justify-center gap-6"
+              className="mt-12 flex flex-col items-center gap-4"
             >
-              <button
-                onClick={() => document.getElementById("import-input")?.click()}
-                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-white transition-colors"
-              >
-                <Upload size={14} /> Importar
-                <input
-                  id="import-input"
-                  type="file"
-                  className="hidden"
-                  onChange={importData}
-                  accept=".json"
-                />
-              </button>
-              <button
-                onClick={exportData}
-                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-white transition-colors"
-              >
-                <Download size={14} /> Backup
-              </button>
+              <div className="flex justify-center gap-6">
+                <button
+                  onClick={() => document.getElementById("import-input")?.click()}
+                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-white transition-colors"
+                >
+                  <Upload size={14} /> Importar
+                  <input
+                    id="import-input"
+                    type="file"
+                    className="hidden"
+                    onChange={importData}
+                    accept=".json"
+                  />
+                </button>
+                <button
+                  onClick={exportData}
+                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-white transition-colors"
+                >
+                  <Download size={14} /> Backup
+                </button>
+              </div>
+
+              {!isResetting ? (
+                <button
+                  onClick={() => setIsResetting(true)}
+                  className="flex items-center gap-2 px-6 py-2 rounded-full border border-brand-primary/20 bg-brand-primary/5 text-[10px] font-black uppercase tracking-widest text-brand-primary hover:bg-brand-primary/10 transition-all"
+                >
+                  <RotateCcw size={12} /> Resetar para FULL BODY
+                </button>
+              ) : (
+                <div className="flex gap-3 items-center">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-rose-500 animate-pulse">Confirmar reset?</span>
+                  <button
+                    onClick={handleResetToFullBody}
+                    className="px-4 py-2 rounded-lg bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest"
+                  >
+                    SIM
+                  </button>
+                  <button
+                    onClick={() => setIsResetting(false)}
+                    className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-400 text-[10px] font-black uppercase tracking-widest"
+                  >
+                    NÃO
+                  </button>
+                </div>
+              )}
             </motion.div>
 
             <motion.div
@@ -1256,7 +1323,7 @@ export default function App() {
               </button>
             </div>
 
-            <div className="space-y-16">
+            <div className="space-y-4">
               {activeWorkout.exercises.map((exercise, exIdx) => {
                 const log = currentSession.logs.find(
                   (l) => l.exerciseId === exercise.id,
@@ -1264,61 +1331,52 @@ export default function App() {
                 return (
                   <motion.div
                     key={exercise.id}
-                    initial={{ opacity: 0, y: 30 }}
+                    initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: exIdx * 0.1 }}
-                    className="space-y-8"
+                    transition={{ delay: exIdx * 0.05 }}
+                    className="space-y-2"
                   >
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <MovementIcon name={exercise.name} index={exIdx + 1} />
-                        <h3 className="text-[26px] sm:text-3xl font-black tracking-tighter leading-tight italic uppercase">
+                    <div className="flex items-center justify-between gap-2 px-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 bg-zinc-900 rounded flex items-center justify-center text-[10px] font-black text-brand-primary border border-zinc-800">
+                          {exIdx + 1}
+                        </div>
+                        <h3 className="text-sm font-black tracking-tight italic uppercase truncate">
                           {exercise.name}
                         </h3>
                       </div>
-                      <div className="flex gap-2">
-                        <div className="inner-glass px-3 py-1.5 flex items-center gap-2 border-amber-500/20 bg-amber-500/10">
-                          <Trophy size={14} className="text-amber-400" />
-                          <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">
-                            RECORDE: {exercise.prWeight}KG
-                          </span>
-                        </div>
-                        <div className="inner-glass px-3 py-1.5 flex items-center gap-2 border-brand-primary/20 bg-brand-primary/10">
-                          <Target size={14} className="text-brand-primary" />
-                          <span className="text-[10px] font-black uppercase tracking-widest text-brand-primary">
-                            META: {exercise.targetReps} REPETIÇÕES
-                          </span>
-                        </div>
+                      <div className="inner-glass px-1.5 py-0.5 flex items-center gap-1 border-amber-500/20 bg-amber-500/5">
+                        <Trophy size={8} className="text-amber-500" />
+                        <span className="text-[8px] font-black uppercase text-amber-500">
+                          PR: {exercise.prWeight}
+                        </span>
                       </div>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-1">
                       {log?.sets.map((set, setIdx) => (
                         <motion.div
                           key={set.id}
                           layout
-                          className={`flex items-center gap-3 p-3 rounded-3xl transition-all ${
+                          className={`flex items-center gap-1.5 p-1.5 rounded-xl transition-all ${
                             set.completed
-                              ? "bg-zinc-900 border border-brand-primary/20 scale-[0.98]"
-                              : "bg-transparent border border-zinc-900"
+                              ? "bg-zinc-900/40 border border-brand-primary/20"
+                              : "bg-[#050505] border border-zinc-900"
                           }`}
                         >
-                          <div className="w-12 flex flex-col items-center">
-                            <span
-                              className={`text-[8px] font-black uppercase tracking-tighter ${
-                                set.type === "warmup"
-                                  ? "text-zinc-600 font-mono"
-                                  : "text-brand-primary"
-                              }`}
-                            >
-                              {set.type === "warmup"
-                                ? `AQ${setIdx + 1}`
-                                : `SÉRIE`}
-                            </span>
+                          <div className="w-10 flex flex-col items-center justify-center gap-0.5">
+                            <span className="text-[6px] font-black text-zinc-700 uppercase leading-none">SEQ</span>
+                            <span className="text-xs font-black text-brand-primary leading-none">{setIdx + 1}</span>
                           </div>
 
-                          <div className="flex-1 grid grid-cols-2 gap-2">
+                          <div className="flex-1 grid grid-cols-2 gap-1.5">
                             <div className="relative">
+                              <button 
+                                onClick={() => updateSet(exercise.id, set.id, { weight: Math.max(0, (set.weight || 0) - 1) })}
+                                className="absolute left-0 top-0 bottom-0 w-10 z-10 flex items-center justify-center text-zinc-600 active:bg-brand-primary/20 rounded-l-lg"
+                              >
+                                <Minus size={16} />
+                              </button>
                               <input
                                 type="number"
                                 value={set.weight || ""}
@@ -1328,13 +1386,25 @@ export default function App() {
                                     weight: Number(e.target.value),
                                   })
                                 }
-                                className="w-full bg-[#0a0a0a] text-center py-5 rounded-2xl font-mono text-2xl font-black focus:ring-2 focus:ring-brand-primary/40 transition-all placeholder:text-zinc-800"
+                                className="w-full bg-[#0a0a0a] text-center py-3.5 px-8 rounded-lg font-mono text-lg font-black focus:ring-1 focus:ring-brand-primary/40 placeholder:text-zinc-800"
                               />
-                              <span className="absolute bottom-2 right-4 text-[8px] font-black text-zinc-700 uppercase">
+                              <button 
+                                onClick={() => updateSet(exercise.id, set.id, { weight: (set.weight || 0) + 1 })}
+                                className="absolute right-0 top-0 bottom-0 w-10 z-10 flex items-center justify-center text-zinc-600 active:bg-brand-primary/20 rounded-r-lg"
+                              >
+                                <Plus size={16} />
+                              </button>
+                              <span className="absolute -top-1 left-2 text-[6px] font-black text-zinc-700 uppercase bg-[#050505] px-1">
                                 KG
                               </span>
                             </div>
                             <div className="relative">
+                              <button 
+                                onClick={() => updateSet(exercise.id, set.id, { reps: Math.max(0, (set.reps || 0) - 1) })}
+                                className="absolute left-0 top-0 bottom-0 w-10 z-10 flex items-center justify-center text-zinc-600 active:bg-brand-primary/20 rounded-l-lg"
+                              >
+                                <Minus size={16} />
+                              </button>
                               <input
                                 type="number"
                                 value={set.reps || ""}
@@ -1344,24 +1414,30 @@ export default function App() {
                                     reps: Number(e.target.value),
                                   })
                                 }
-                                className="w-full bg-[#0a0a0a] text-center py-5 rounded-2xl font-mono text-2xl font-black focus:ring-2 focus:ring-brand-primary/40 transition-all placeholder:text-zinc-800"
+                                className="w-full bg-[#0a0a0a] text-center py-3.5 px-8 rounded-lg font-mono text-lg font-black focus:ring-1 focus:ring-brand-primary/40 placeholder:text-zinc-800"
                               />
-                              <span className="absolute bottom-2 right-4 text-[8px] font-black text-zinc-700 uppercase">
-                                REPETIÇÕES
+                              <button 
+                                onClick={() => updateSet(exercise.id, set.id, { reps: (set.reps || 0) + 1 })}
+                                className="absolute right-0 top-0 bottom-0 w-10 z-10 flex items-center justify-center text-zinc-600 active:bg-brand-primary/20 rounded-r-lg"
+                              >
+                                <Plus size={16} />
+                              </button>
+                              <span className="absolute -top-1 left-2 text-[6px] font-black text-zinc-700 uppercase bg-[#050505] px-1">
+                                REPS
                               </span>
                             </div>
                           </div>
 
                           <motion.button
-                            whileTap={{ scale: 0.8 }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() =>
                               updateSet(exercise.id, set.id, {
                                 completed: !set.completed,
                               })
                             }
-                            className={`w-14 h-14 flex items-center justify-center rounded-2xl transition-all shrink-0 ${
+                            className={`w-12 h-12 flex items-center justify-center rounded-lg transition-all shrink-0 ${
                               set.completed
-                                ? "bg-brand-primary text-white shadow-lg shadow-brand-primary/20"
+                                ? "bg-brand-primary text-white"
                                 : "bg-zinc-800 text-zinc-600"
                             }`}
                           >
@@ -1371,35 +1447,35 @@ export default function App() {
                               <div className="w-6 h-6 border-2 border-zinc-700 rounded-full" />
                             )}
                           </motion.button>
-                          
-                          {/* Remove Set Button */}
-                          <motion.button
-                            whileTap={{ scale: 0.8 }}
-                            onClick={() => removeSet(exercise.id, set.id)}
-                            className="w-10 h-14 flex items-center justify-center rounded-2xl bg-zinc-900 border border-zinc-900 text-zinc-600 hover:text-rose-500 hover:bg-zinc-800 transition-all shrink-0"
-                          >
-                            <X size={16} className="stroke-[2.5]" />
-                          </motion.button>
                         </motion.div>
                       ))}
                     </div>
 
-                    {/* Add Set Buttons */}
-                    <div className="flex gap-2 justify-center mt-4 pt-2">
+                    <div className="flex gap-2 justify-center py-1">
                       <button 
                         onClick={() => addSet(exercise.id, "warmup")}
-                        className="px-4 py-2 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900 transition-colors"
+                        className="px-2 py-1 rounded-md border border-zinc-800 text-zinc-700 text-[8px] font-black uppercase tracking-widest hover:bg-zinc-900 transition-colors"
                       >
-                        + Aquecimento
+                        + AQUEL.
                       </button>
                       <button 
                         onClick={() => addSet(exercise.id, "work")}
-                        className="px-4 py-2 rounded-xl bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-[10px] font-black uppercase tracking-widest hover:bg-brand-primary/20 transition-colors"
+                        className="px-2 py-1 rounded-md bg-brand-primary/5 border border-brand-primary/10 text-brand-primary text-[8px] font-black uppercase tracking-widest hover:bg-brand-primary/10 transition-colors"
                       >
-                        + Série
+                        + SÉRIE
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const log = currentSession.logs.find(l => l.exerciseId === exercise.id);
+                          if (log && log.sets.length > 0) {
+                            removeSet(exercise.id, log.sets[log.sets.length - 1].id);
+                          }
+                        }}
+                        className="px-2 py-1 rounded-md border border-rose-500/10 text-rose-500/30 text-[8px] font-black uppercase hover:bg-rose-500/5 transition-colors"
+                      >
+                         Remover
                       </button>
                     </div>
-
                   </motion.div>
                 );
               })}
