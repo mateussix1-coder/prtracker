@@ -1,15 +1,15 @@
-import { useState, useEffect, ChangeEvent } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useState, useEffect, ChangeEvent } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { GoogleGenAI } from "@google/genai";
-import { 
-  Trophy, 
-  Dumbbell, 
-  History, 
-  ChevronRight, 
-  CheckCircle2, 
-  Zap, 
-  Flame, 
-  Save, 
+import {
+  Trophy,
+  Dumbbell,
+  History,
+  ChevronRight,
+  CheckCircle2,
+  Zap,
+  Flame,
+  Save,
   Calendar,
   Download,
   Upload,
@@ -18,35 +18,86 @@ import {
   AlertTriangle,
   ArrowUpCircle,
   X,
-  Target
-} from 'lucide-react';
-import { INITIAL_WORKOUTS } from './constants';
-import { WorkoutDay, ExerciseSet, TrainingSession, Exercise } from './types';
+  Target,
+} from "lucide-react";
+import { INITIAL_WORKOUTS } from "./constants";
+import { WorkoutDay, ExerciseSet, TrainingSession, Exercise } from "./types";
+
+const MovementIcon = ({ name, index }: { name: string, index: number }) => {
+  const n = name.toLowerCase();
+  let type = 'push'; 
+  if (n.includes('remada') || n.includes('puxada') || n.includes('rosca') || n.includes('flexora') || n.includes('stiff')) type = 'pull';
+  else if (n.includes('agachamento') || n.includes('leg press') || n.includes('extensora')) type = 'legs';
+  
+  const yAnim = type === 'pull' ? [-4, 6, -4] : type === 'legs' ? [-6, 6, -6] : [6, -8, 6];
+  const rotAnim = type === 'pull' ? [0, -10, 0] : type === 'push' ? [0, 5, 0] : [0, 0, 0];
+  
+  return (
+    <div className="relative w-[50px] h-[50px] shrink-0 bg-gradient-to-br from-zinc-900 to-[#0a0a0a] border border-zinc-800 rounded-[18px] flex items-center justify-center overflow-hidden shadow-inner">
+       <span className="absolute text-[40px] -right-2 -bottom-2 font-black italic text-zinc-800/40 leading-none select-none z-0">{index}</span>
+       
+       <motion.div
+         animate={{ y: yAnim, rotate: rotAnim }}
+         transition={{ 
+            duration: 2.5, 
+            repeat: Infinity, 
+            ease: "easeInOut",
+         }}
+         className="relative z-10 flex items-center drop-shadow-[0_4px_6px_rgba(0,0,0,0.8)]"
+       >
+          <div className="w-[8px] h-5 bg-gradient-to-br from-brand-primary to-rose-700 rounded-sm border-t border-l border-white/20 shadow-[inset_-2px_-2px_4px_rgba(0,0,0,0.5)]" />
+          <div className="w-4 h-1.5 bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-600 shadow-[inset_0_2px_2px_rgba(255,255,255,0.8)]" />
+          <div className="w-[8px] h-5 bg-gradient-to-br from-brand-primary to-rose-700 rounded-sm border-t border-r border-white/20 shadow-[inset_2px_-2px_4px_rgba(0,0,0,0.5)]" />
+       </motion.div>
+    </div>
+  );
+};
 
 export default function App() {
   const [workouts, setWorkouts] = useState<WorkoutDay[]>(() => {
-    const saved = localStorage.getItem('pr_tracker_workouts');
+    const saved = localStorage.getItem("pr_tracker_workouts");
     return saved ? JSON.parse(saved) : INITIAL_WORKOUTS;
   });
 
-  const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(null);
-  const [currentSession, setCurrentSession] = useState<TrainingSession | null>(null);
+  const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(() => {
+    const saved = localStorage.getItem("pr_tracker_active_id");
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [currentSession, setCurrentSession] = useState<TrainingSession | null>(
+    () => {
+      const saved = localStorage.getItem("pr_tracker_session");
+      return saved ? JSON.parse(saved) : null;
+    },
+  );
   const [showHistory, setShowHistory] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
-  const [aiFeedback, setAiFeedback] = useState<string>('');
+  const [aiFeedback, setAiFeedback] = useState<string>("");
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [history, setHistory] = useState<TrainingSession[]>(() => {
-    const saved = localStorage.getItem('pr_tracker_history');
+    const saved = localStorage.getItem("pr_tracker_history");
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [prAlert, setPrAlert] = useState<string | null>(null);
+
   useEffect(() => {
-    localStorage.setItem('pr_tracker_workouts', JSON.stringify(workouts));
+    localStorage.setItem("pr_tracker_workouts", JSON.stringify(workouts));
   }, [workouts]);
 
   useEffect(() => {
-    localStorage.setItem('pr_tracker_history', JSON.stringify(history));
+    localStorage.setItem("pr_tracker_history", JSON.stringify(history));
   }, [history]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "pr_tracker_active_id",
+      JSON.stringify(activeWorkoutId),
+    );
+  }, [activeWorkoutId]);
+
+  useEffect(() => {
+    localStorage.setItem("pr_tracker_session", JSON.stringify(currentSession));
+  }, [currentSession]);
 
   const startWorkout = (workout: WorkoutDay) => {
     setActiveWorkoutId(workout.id);
@@ -54,53 +105,122 @@ export default function App() {
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
       workoutId: workout.id,
-      logs: workout.exercises.map(ex => {
+      logs: workout.exercises.map((ex) => {
         const baseWeight = ex.prWeight || 20;
         return {
           exerciseId: ex.id,
           sets: [
-            { id: crypto.randomUUID(), type: 'warmup', weight: Math.max(1, Math.round(baseWeight * 0.5)), reps: ex.targetReps, completed: false },
-            { id: crypto.randomUUID(), type: 'warmup', weight: Math.max(1, Math.round(baseWeight * 0.75)), reps: Math.max(1, ex.targetReps - 2), completed: false },
-            { id: crypto.randomUUID(), type: 'work', weight: baseWeight, reps: ex.targetReps, completed: false },
-            { id: crypto.randomUUID(), type: 'work', weight: baseWeight, reps: ex.targetReps, completed: false },
-          ]
+            {
+              id: crypto.randomUUID(),
+              type: "warmup",
+              weight: Math.max(1, Math.round(baseWeight * 0.5)),
+              reps: ex.targetReps,
+              completed: false,
+            },
+            {
+              id: crypto.randomUUID(),
+              type: "warmup",
+              weight: Math.max(1, Math.round(baseWeight * 0.75)),
+              reps: Math.max(1, ex.targetReps - 2),
+              completed: false,
+            },
+            {
+              id: crypto.randomUUID(),
+              type: "work",
+              weight: baseWeight,
+              reps: ex.targetReps,
+              completed: false,
+            },
+            {
+              id: crypto.randomUUID(),
+              type: "work",
+              weight: baseWeight,
+              reps: ex.targetReps,
+              completed: false,
+            },
+          ],
         };
-      })
+      }),
     };
     setCurrentSession(newSession);
   };
 
-  const updateSet = (exerciseId: string, setId: string, updates: Partial<ExerciseSet>) => {
+  const updateSet = (
+    exerciseId: string,
+    setId: string,
+    updates: Partial<ExerciseSet>,
+  ) => {
     if (!currentSession) return;
-    const newLogs = currentSession.logs.map(log => {
+    const newLogs = currentSession.logs.map((log) => {
       if (log.exerciseId === exerciseId) {
         return {
           ...log,
-          sets: log.sets.map(s => s.id === setId ? { ...s, ...updates } : s)
+          sets: log.sets.map((s) =>
+            s.id === setId ? { ...s, ...updates } : s,
+          ),
         };
       }
       return log;
     });
     setCurrentSession({ ...currentSession, logs: newLogs });
+
+    if (updates.completed === true) {
+      const activeWorkout = workouts.find((w) => w.id === activeWorkoutId);
+      const exercise = activeWorkout?.exercises.find(
+        (e) => e.id === exerciseId,
+      );
+      const log = currentSession.logs.find((l) => l.exerciseId === exerciseId);
+      const setBeforeUpdate = log?.sets.find((s) => s.id === setId);
+
+      if (exercise && setBeforeUpdate && setBeforeUpdate.type === "work") {
+        const expectedWeight =
+          updates.weight !== undefined
+            ? updates.weight
+            : setBeforeUpdate.weight;
+        const expectedReps =
+          updates.reps !== undefined ? updates.reps : setBeforeUpdate.reps;
+
+        if (
+          expectedWeight > 0 &&
+          expectedReps > 0 &&
+          (expectedWeight > exercise.prWeight || (expectedWeight === exercise.prWeight && expectedReps >= exercise.targetReps))
+        ) {
+          setPrAlert("🎉 " + exercise.name + " (" + expectedWeight + "KG)");
+          setTimeout(() => setPrAlert(null), 4000);
+        }
+      }
+    }
   };
 
-  const getAiCoachFeedback = async (session: TrainingSession, exercises: Exercise[]) => {
+  const getAiCoachFeedback = async (
+    session: TrainingSession,
+    exercises: Exercise[],
+  ) => {
     setIsAiLoading(true);
-    setAiFeedback('');
+    setAiFeedback("");
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === 'undefined') {
-        setAiFeedback('Coach IA indisponível: Chave da API GEMINI_API_KEY não configurada no ambiente (Vercel). Mas continue treinando pesado!');
+      if (!apiKey || apiKey === "undefined") {
+        setAiFeedback(
+          "Coach IA indisponível: Chave da API GEMINI_API_KEY não configurada no ambiente (Vercel). Mas continue treinando pesado!",
+        );
         return;
       }
-      
+
       const ai = new GoogleGenAI({ apiKey });
-      const summaryText = session.logs.map(log => {
-        const ex = exercises.find(e => e.id === log.exerciseId);
-        const workSets = log.sets.filter(s => s.type === 'work' && s.completed);
-        const best = workSets.length > 0 ? workSets.reduce((p, c) => (c.weight >= p.weight) ? c : p) : null;
-        return `${ex?.name}: ${best ? `${best.weight}kg x ${best.reps} (Meta: ${ex?.targetReps})` : 'Não concluído'}`;
-      }).join('\n');
+      const summaryText = session.logs
+        .map((log) => {
+          const ex = exercises.find((e) => e.id === log.exerciseId);
+          const workSets = log.sets.filter(
+            (s) => s.type === "work" && s.completed,
+          );
+          const best =
+            workSets.length > 0
+              ? workSets.reduce((p, c) => (c.weight >= p.weight ? c : p))
+              : null;
+          return `${ex?.name}: ${best ? `${best.weight}kg x ${best.reps} (Meta: ${ex?.targetReps})` : "Não concluído"}`;
+        })
+        .join("\n");
 
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
@@ -111,9 +231,13 @@ export default function App() {
         Se as metas foram batidas, parabenize pela evolução. Se não, lembre que no HIT a consistência na mesma carga é o primeiro passo para o novo PR. 
         Use termos como 'tempo sob tensão', 'sobrecarga progressiva' ou 'falha concêntrica' se fizer sentido.`,
       });
-      setAiFeedback(response.text || 'O Coach está sem palavras com seu treino hoje!');
+      setAiFeedback(
+        response.text || "O Coach está sem palavras com seu treino hoje!",
+      );
     } catch (error) {
-      setAiFeedback('Erro ao conectar com o Coach IA. Mas continue treinando pesado!');
+      setAiFeedback(
+        "Erro ao conectar com o Coach IA. Mas continue treinando pesado!",
+      );
     } finally {
       setIsAiLoading(false);
     }
@@ -123,29 +247,41 @@ export default function App() {
     if (!currentSession) return;
 
     const newWorkouts = [...workouts];
-    const workoutIdx = newWorkouts.findIndex(w => w.id === currentSession.workoutId);
-    
+    const workoutIdx = newWorkouts.findIndex(
+      (w) => w.id === currentSession.workoutId,
+    );
+
     if (workoutIdx !== -1) {
       const workout = { ...newWorkouts[workoutIdx] };
-      workout.exercises = workout.exercises.map(ex => {
-        const log = currentSession.logs.find(l => l.exerciseId === ex.id);
+      workout.exercises = workout.exercises.map((ex) => {
+        const log = currentSession.logs.find((l) => l.exerciseId === ex.id);
         if (log) {
-          const workSets = log.sets.filter(s => s.type === 'work' && s.completed);
+          const workSets = log.sets.filter(
+            (s) => s.type === "work" && s.completed,
+          );
           if (workSets.length > 0) {
-            const bestSet = workSets.reduce((prev, curr) => (curr.weight >= prev.weight && curr.reps >= prev.reps) ? curr : prev);
-            
+            const bestSet = workSets.reduce((prev, curr) =>
+              curr.weight >= prev.weight && curr.reps >= prev.reps
+                ? curr
+                : prev,
+            );
+
             let newPrWeight = ex.prWeight;
             if (bestSet.reps >= ex.targetReps) {
-              newPrWeight = bestSet.weight + (bestSet.reps > ex.targetReps ? ex.increment * 2 : ex.increment);
+              newPrWeight =
+                bestSet.weight +
+                (bestSet.reps > ex.targetReps
+                  ? ex.increment * 2
+                  : ex.increment);
             } else if (bestSet.weight > ex.prWeight) {
-                newPrWeight = bestSet.weight;
+              newPrWeight = bestSet.weight;
             }
 
             return {
               ...ex,
               lastWeight: bestSet.weight,
               lastReps: bestSet.reps,
-              prWeight: newPrWeight
+              prWeight: newPrWeight,
             };
           }
         }
@@ -153,8 +289,11 @@ export default function App() {
       });
       newWorkouts[workoutIdx] = workout;
       setWorkouts(newWorkouts);
-      
-      const sessionWithSummary = { ...currentSession, date: new Date().toISOString() };
+
+      const sessionWithSummary = {
+        ...currentSession,
+        date: new Date().toISOString(),
+      };
       getAiCoachFeedback(sessionWithSummary, workout.exercises);
     }
 
@@ -166,16 +305,18 @@ export default function App() {
     setShowSummary(false);
     setActiveWorkoutId(null);
     setCurrentSession(null);
-    setAiFeedback('');
+    setAiFeedback("");
   };
 
   const exportData = () => {
     const data = { workouts, history };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `pr_tracker_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `pr_tracker_backup_${new Date().toISOString().split("T")[0]}.json`;
     a.click();
   };
 
@@ -189,26 +330,26 @@ export default function App() {
         if (data.workouts && data.history) {
           setWorkouts(data.workouts);
           setHistory(data.history);
-          alert('Dados importados com sucesso!');
+          alert("Dados importados com sucesso!");
         }
       } catch (err) {
-        alert('Erro ao importar arquivo.');
+        alert("Erro ao importar arquivo.");
       }
     };
     reader.readAsText(file);
   };
 
-  const activeWorkout = workouts.find(w => w.id === activeWorkoutId);
+  const activeWorkout = workouts.find((w) => w.id === activeWorkoutId);
 
   const getSummaryStats = () => {
     if (!currentSession || !activeWorkout) return { prs: 0, missed: 0 };
     let prs = 0;
     let missed = 0;
-    currentSession.logs.forEach(log => {
-      const ex = activeWorkout.exercises.find(e => e.id === log.exerciseId);
-      const workSets = log.sets.filter(s => s.type === 'work' && s.completed);
+    currentSession.logs.forEach((log) => {
+      const ex = activeWorkout.exercises.find((e) => e.id === log.exerciseId);
+      const workSets = log.sets.filter((s) => s.type === "work" && s.completed);
       if (workSets.length > 0) {
-        const best = workSets.reduce((p, c) => (c.reps >= p.reps) ? c : p);
+        const best = workSets.reduce((p, c) => (c.reps >= p.reps ? c : p));
         if (ex && best.reps >= ex.targetReps) prs++;
         else missed++;
       }
@@ -220,13 +361,43 @@ export default function App() {
     <div className="max-w-md mx-auto min-h-screen pt-12 pb-32 px-6 relative">
       {/* Background decoration */}
       <div className="fixed inset-0 -z-10 bg-[#050505]">
-          <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[40%] bg-brand-primary/10 rounded-full blur-[100px] animate-pulse" />
-          <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[40%] bg-brand-secondary/10 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[40%] bg-brand-primary/10 rounded-full blur-[100px] animate-pulse" />
+        <div
+          className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[40%] bg-brand-secondary/10 rounded-full blur-[100px] animate-pulse"
+          style={{ animationDelay: "2s" }}
+        />
       </div>
+
+      <AnimatePresence>
+        {prAlert && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed top-6 left-4 right-4 z-[200] flex justify-center pointer-events-none"
+          >
+            <div className="bg-brand-primary text-white pl-5 pr-6 py-4 rounded-2xl shadow-2xl shadow-brand-primary/40 flex items-center gap-4">
+              <Trophy
+                size={28}
+                className="text-amber-300 animate-pulse"
+                fill="currentColor"
+              />
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-pink-200 leading-none mb-1">
+                  NOVO RECORDE
+                </p>
+                <p className="font-black italic uppercase leading-none text-xl">
+                  {prAlert}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence mode="wait">
         {!activeWorkoutId && !showHistory && (
-          <motion.div 
+          <motion.div
             key="home"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -235,24 +406,26 @@ export default function App() {
           >
             <header className="mb-12 flex justify-between items-end">
               <div>
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.2 }}
                   className="flex items-center gap-2 mb-2"
                 >
                   <span className="w-8 h-1 bg-brand-primary rounded-full" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Peak Performance</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
+                    Peak Performance
+                  </span>
                 </motion.div>
                 <h1 className="text-5xl font-black italic tracking-tighter leading-none">
                   PR <span className="text-brand-primary">TRACKER</span>
                 </h1>
               </div>
               <div className="flex gap-2 mb-1">
-                <motion.button 
+                <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => setShowHistory(true)} 
+                  onClick={() => setShowHistory(true)}
                   className="p-3 bg-zinc-900 border border-zinc-800 rounded-2xl hover:bg-zinc-800 transition-colors"
                 >
                   <History size={20} />
@@ -260,10 +433,10 @@ export default function App() {
               </div>
             </header>
 
-            <motion.div 
+            <motion.div
               className="grid grid-cols-1 gap-6"
               variants={{
-                show: { transition: { staggerChildren: 0.1 } }
+                show: { transition: { staggerChildren: 0.1 } },
               }}
               initial="hidden"
               animate="show"
@@ -273,7 +446,7 @@ export default function App() {
                   key={workout.id}
                   variants={{
                     hidden: { opacity: 0, y: 20 },
-                    show: { opacity: 1, y: 0 }
+                    show: { opacity: 1, y: 0 },
                   }}
                   whileHover={{ y: -4 }}
                   whileTap={{ scale: 0.98 }}
@@ -281,45 +454,82 @@ export default function App() {
                   className="glass-card p-8 text-left hover:border-brand-primary/30 transition-all group relative overflow-hidden"
                 >
                   <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity rotate-12">
-                     <Dumbbell size={120} weight="fill" />
+                    <Dumbbell size={120} weight="fill" />
                   </div>
                   <div className="relative z-10">
-                    <span className="text-[10px] font-black text-brand-primary uppercase tracking-[0.2em] block mb-2">{workout.dayName}</span>
-                    <h3 className="text-3xl font-black italic tracking-tight group-hover:translate-x-1 transition-transform">{workout.title}</h3>
+                    <span className="text-[10px] font-black text-brand-primary uppercase tracking-[0.2em] block mb-2">
+                      {workout.dayName}
+                    </span>
+                    <h3 className="text-3xl font-black italic tracking-tight group-hover:translate-x-1 transition-transform">
+                      {workout.title}
+                    </h3>
                     <div className="flex items-center gap-4 mt-6">
-                       <div className="flex -space-x-2">
-                          {[1,2,3].map(i => (
-                            <div key={i} className="w-6 h-6 rounded-full border-2 border-zinc-900 bg-zinc-800 flex items-center justify-center">
-                               <Zap size={10} className="text-zinc-500" />
-                            </div>
-                          ))}
-                       </div>
-                       <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">{workout.exercises.length} EXERCÍCIOS</p>
+                      <div className="flex -space-x-2">
+                        {[1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className="w-6 h-6 rounded-full border-2 border-zinc-900 bg-zinc-800 flex items-center justify-center"
+                          >
+                            <Zap size={10} className="text-zinc-500" />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                        {workout.exercises.length} EXERCÍCIOS
+                      </p>
                     </div>
                   </div>
                 </motion.button>
               ))}
             </motion.div>
-            
-            <motion.div 
+
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8 }}
               className="mt-12 flex justify-center gap-6"
             >
-              <button onClick={() => document.getElementById('import-input')?.click()} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-white transition-colors">
+              <button
+                onClick={() => document.getElementById("import-input")?.click()}
+                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-white transition-colors"
+              >
                 <Upload size={14} /> Importar
-                <input id="import-input" type="file" className="hidden" onChange={importData} accept=".json" />
+                <input
+                  id="import-input"
+                  type="file"
+                  className="hidden"
+                  onChange={importData}
+                  accept=".json"
+                />
               </button>
-              <button onClick={exportData} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-white transition-colors">
+              <button
+                onClick={exportData}
+                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-white transition-colors"
+              >
                 <Download size={14} /> Backup
               </button>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1 }}
+              className="mt-16 text-center"
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 border border-zinc-900 rounded-full bg-[#030303]">
+                <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.3em]">
+                  CRAFTED BY
+                </span>
+                <span className="text-[10px] font-black text-brand-primary uppercase tracking-[0.2em]">
+                  MATEUS
+                </span>
+              </div>
             </motion.div>
           </motion.div>
         )}
 
         {showHistory && (
-          <motion.div 
+          <motion.div
             key="history"
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
@@ -328,26 +538,33 @@ export default function App() {
             className="space-y-8"
           >
             <div className="flex items-center justify-between">
-               <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-brand-secondary/20 flex items-center justify-center text-brand-secondary">
-                     <History size={24} />
-                  </div>
-                  <h2 className="text-3xl font-black italic tracking-tighter uppercase">MEU LOG</h2>
-               </div>
-               <button onClick={() => setShowHistory(false)} className="p-3 bg-zinc-900 rounded-full">
-                 <X size={20} />
-               </button>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-brand-secondary/20 flex items-center justify-center text-brand-secondary">
+                  <History size={24} />
+                </div>
+                <h2 className="text-3xl font-black italic tracking-tighter uppercase">
+                  MEU LOG
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="p-3 bg-zinc-900 rounded-full"
+              >
+                <X size={20} />
+              </button>
             </div>
 
             <div className="space-y-4">
               {history.length === 0 ? (
                 <div className="h-64 flex flex-col items-center justify-center glass-card border-dashed">
                   <RotateCcw className="text-zinc-700 mb-4" size={40} />
-                  <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Vazio por enquanto</p>
+                  <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">
+                    Vazio por enquanto
+                  </p>
                 </div>
               ) : (
                 history.map((session, sIdx) => (
-                  <motion.div 
+                  <motion.div
                     key={session.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -356,9 +573,19 @@ export default function App() {
                   >
                     <div className="flex justify-between items-center mb-6 pb-4 border-b border-zinc-800/50">
                       <div>
-                        <h4 className="font-black italic text-xl uppercase tracking-tighter">{workouts.find(w => w.id === session.workoutId)?.title}</h4>
+                        <h4 className="font-black italic text-xl uppercase tracking-tighter">
+                          {
+                            workouts.find((w) => w.id === session.workoutId)
+                              ?.title
+                          }
+                        </h4>
                         <p className="text-[10px] font-mono text-zinc-500 uppercase mt-1">
-                          {new Date(session.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                          {new Date(session.date).toLocaleDateString("pt-BR", {
+                            day: "2-digit",
+                            month: "long",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </p>
                       </div>
                       <div className="p-2 px-3 bg-zinc-800 rounded-lg text-[10px] font-black text-brand-primary">
@@ -366,15 +593,26 @@ export default function App() {
                       </div>
                     </div>
                     <div className="grid grid-cols-1 gap-3">
-                      {session.logs.slice(0, 3).map(log => {
-                        const exercise = workouts.flatMap(w => w.exercises).find(e => e.id === log.exerciseId);
+                      {session.logs.slice(0, 3).map((log) => {
+                        const exercise = workouts
+                          .flatMap((w) => w.exercises)
+                          .find((e) => e.id === log.exerciseId);
                         const bestWorkSet = log.sets
-                          .filter(s => s.type === 'work' && s.completed)
-                          .reduce((prev, curr) => (curr.weight >= prev.weight) ? curr : prev, log.sets[0]);
-                        
+                          .filter((s) => s.type === "work" && s.completed)
+                          .reduce(
+                            (prev, curr) =>
+                              curr.weight >= prev.weight ? curr : prev,
+                            log.sets[0],
+                          );
+
                         return (
-                          <div key={log.exerciseId} className="flex justify-between items-center text-sm">
-                            <span className="text-zinc-400 font-medium">{exercise?.name}</span>
+                          <div
+                            key={log.exerciseId}
+                            className="flex justify-between items-center text-sm"
+                          >
+                            <span className="text-zinc-400 font-medium">
+                              {exercise?.name}
+                            </span>
                             <span className="font-mono font-black text-zinc-200">
                               {bestWorkSet.weight}kg × {bestWorkSet.reps}
                             </span>
@@ -395,7 +633,7 @@ export default function App() {
         )}
 
         {currentSession && activeWorkout && !showSummary && (
-          <motion.div 
+          <motion.div
             key="active"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -404,9 +642,9 @@ export default function App() {
             className="pb-40"
           >
             <div className="sticky top-6 z-50 glass-card p-4 flex items-center justify-between mb-12 shadow-2xl shadow-black">
-              <button 
+              <button
                 onClick={() => {
-                  if(confirm('Abortar treino? Dados atuais serão perdidos.')) {
+                  if (confirm("Abortar treino? Dados atuais serão perdidos.")) {
                     setActiveWorkoutId(null);
                     setCurrentSession(null);
                   }
@@ -416,10 +654,14 @@ export default function App() {
                 Sair
               </button>
               <div className="text-center">
-                 <h2 className="text-lg font-black italic tracking-tighter uppercase text-brand-primary leading-none">{activeWorkout.title}</h2>
-                 <p className="text-[8px] font-black tracking-[0.3em] uppercase text-zinc-500 mt-1">Sessão Ativa</p>
+                <h2 className="text-lg font-black italic tracking-tighter uppercase text-brand-primary leading-none">
+                  {activeWorkout.title}
+                </h2>
+                <p className="text-[8px] font-black tracking-[0.3em] uppercase text-zinc-500 mt-1">
+                  Sessão Ativa
+                </p>
               </div>
-              <button 
+              <button
                 onClick={finishWorkout}
                 className="bg-white text-zinc-950 text-[10px] px-5 py-2.5 rounded-xl font-black uppercase tracking-widest"
               >
@@ -429,82 +671,118 @@ export default function App() {
 
             <div className="space-y-16">
               {activeWorkout.exercises.map((exercise, exIdx) => {
-                const log = currentSession.logs.find(l => l.exerciseId === exercise.id);
+                const log = currentSession.logs.find(
+                  (l) => l.exerciseId === exercise.id,
+                );
                 return (
-                  <motion.div 
-                    key={exercise.id} 
+                  <motion.div
+                    key={exercise.id}
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: exIdx * 0.1 }}
                     className="space-y-8"
                   >
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                           <span className="text-5xl font-black italic text-zinc-800/50 leading-none">{exIdx + 1}</span>
-                           <h3 className="text-3xl font-black tracking-tighter leading-tight italic">
-                             {exercise.name}
-                           </h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <MovementIcon name={exercise.name} index={exIdx + 1} />
+                        <h3 className="text-[26px] sm:text-3xl font-black tracking-tighter leading-tight italic uppercase">
+                          {exercise.name}
+                        </h3>
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="inner-glass px-3 py-1.5 flex items-center gap-2 border-amber-500/20 bg-amber-500/10">
+                          <Trophy size={14} className="text-amber-400" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">
+                            PR: {exercise.prWeight}KG
+                          </span>
                         </div>
-                        <div className="flex gap-2">
-                           <div className="inner-glass px-3 py-1.5 flex items-center gap-2">
-                             <Trophy size={14} className="text-amber-400" />
-                             <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">PR: {exercise.prWeight}KG</span>
-                           </div>
-                           <div className="inner-glass px-3 py-1.5 flex items-center gap-2">
-                             <Target size={14} className="text-brand-primary" />
-                             <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">META: {exercise.targetReps} REPS</span>
-                           </div>
+                        <div className="inner-glass px-3 py-1.5 flex items-center gap-2 border-brand-primary/20 bg-brand-primary/10">
+                          <Target size={14} className="text-brand-primary" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-brand-primary">
+                            META: {exercise.targetReps} REPS
+                          </span>
                         </div>
+                      </div>
                     </div>
 
                     <div className="space-y-4">
                       {log?.sets.map((set, setIdx) => (
-                        <motion.div 
+                        <motion.div
                           key={set.id}
                           layout
                           className={`flex items-center gap-3 p-3 rounded-3xl transition-all ${
-                            set.completed ? 'bg-zinc-900 border border-brand-primary/20 scale-[0.98]' : 'bg-transparent border border-zinc-900'
+                            set.completed
+                              ? "bg-zinc-900 border border-brand-primary/20 scale-[0.98]"
+                              : "bg-transparent border border-zinc-900"
                           }`}
                         >
                           <div className="w-12 flex flex-col items-center">
-                            <span className={`text-[8px] font-black uppercase tracking-tighter ${
-                              set.type === 'warmup' ? 'text-zinc-600 font-mono' : 'text-brand-primary'
-                            }`}>
-                              {set.type === 'warmup' ? `AQ${setIdx + 1}` : `WORK`}
+                            <span
+                              className={`text-[8px] font-black uppercase tracking-tighter ${
+                                set.type === "warmup"
+                                  ? "text-zinc-600 font-mono"
+                                  : "text-brand-primary"
+                              }`}
+                            >
+                              {set.type === "warmup"
+                                ? `AQ${setIdx + 1}`
+                                : `WORK`}
                             </span>
                           </div>
-                          
+
                           <div className="flex-1 grid grid-cols-2 gap-2">
                             <div className="relative">
-                               <input 
+                              <input
                                 type="number"
-                                value={set.weight || ''}
+                                value={set.weight || ""}
                                 placeholder="0"
-                                onChange={(e) => updateSet(exercise.id, set.id, { weight: Number(e.target.value) })}
+                                onChange={(e) =>
+                                  updateSet(exercise.id, set.id, {
+                                    weight: Number(e.target.value),
+                                  })
+                                }
                                 className="w-full bg-[#0a0a0a] text-center py-5 rounded-2xl font-mono text-2xl font-black focus:ring-2 focus:ring-brand-primary/40 transition-all placeholder:text-zinc-800"
-                               />
-                               <span className="absolute bottom-2 right-4 text-[8px] font-black text-zinc-700 uppercase">KG</span>
+                              />
+                              <span className="absolute bottom-2 right-4 text-[8px] font-black text-zinc-700 uppercase">
+                                KG
+                              </span>
                             </div>
                             <div className="relative">
-                               <input 
+                              <input
                                 type="number"
-                                value={set.reps || ''}
+                                value={set.reps || ""}
                                 placeholder="0"
-                                onChange={(e) => updateSet(exercise.id, set.id, { reps: Number(e.target.value) })}
+                                onChange={(e) =>
+                                  updateSet(exercise.id, set.id, {
+                                    reps: Number(e.target.value),
+                                  })
+                                }
                                 className="w-full bg-[#0a0a0a] text-center py-5 rounded-2xl font-mono text-2xl font-black focus:ring-2 focus:ring-brand-primary/40 transition-all placeholder:text-zinc-800"
-                               />
-                               <span className="absolute bottom-2 right-4 text-[8px] font-black text-zinc-700 uppercase">REPS</span>
+                              />
+                              <span className="absolute bottom-2 right-4 text-[8px] font-black text-zinc-700 uppercase">
+                                REPS
+                              </span>
                             </div>
                           </div>
 
-                          <motion.button 
+                          <motion.button
                             whileTap={{ scale: 0.8 }}
-                            onClick={() => updateSet(exercise.id, set.id, { completed: !set.completed })}
+                            onClick={() =>
+                              updateSet(exercise.id, set.id, {
+                                completed: !set.completed,
+                              })
+                            }
                             className={`w-14 h-14 flex items-center justify-center rounded-2xl transition-all ${
-                              set.completed ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/20' : 'bg-zinc-800 text-zinc-600'
+                              set.completed
+                                ? "bg-brand-primary text-white shadow-lg shadow-brand-primary/20"
+                                : "bg-zinc-800 text-zinc-600"
                             }`}
                           >
-                            {set.completed ? <CheckCircle2 size={24} /> : <div className="w-6 h-6 border-2 border-zinc-700 rounded-full" />}
+                            {set.completed ? (
+                              <CheckCircle2 size={24} />
+                            ) : (
+                              <div className="w-6 h-6 border-2 border-zinc-700 rounded-full" />
+                            )}
                           </motion.button>
                         </motion.div>
                       ))}
@@ -517,96 +795,137 @@ export default function App() {
         )}
 
         {showSummary && (
-          <motion.div 
+          <motion.div
             key="summary"
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-[100] bg-[#050505] flex flex-col pt-16 px-8 overflow-y-auto pb-12"
+            className="fixed inset-0 z-[100] bg-[#050505] flex flex-col pt-12 px-5 sm:px-8 overflow-y-auto pb-12"
           >
-            <header className="mb-12 flex justify-between items-center">
-               <h2 className="text-4xl font-black italic tracking-tighter uppercase leading-none">WORKOUT<br/><span className="text-brand-primary">DONE</span></h2>
-               <motion.button 
+            <header className="mb-8 flex justify-between items-center mt-4">
+              <h2 className="text-4xl font-black italic tracking-tighter uppercase leading-none">
+                WORKOUT
+                <br />
+                <span className="text-brand-primary">DONE</span>
+              </h2>
+              <motion.button
                 whileHover={{ rotate: 90 }}
-                onClick={closeSummary} 
+                onClick={closeSummary}
                 className="p-4 bg-zinc-900 rounded-full"
-               >
-                 <X size={24} />
-               </motion.button>
+              >
+                <X size={24} />
+              </motion.button>
             </header>
 
-            <div className="grid grid-cols-2 gap-4 mb-8">
-               <div className="glass-card p-8 flex flex-col items-center justify-center gap-3 border-emerald-500/20 bg-emerald-500/5">
-                  <ArrowUpCircle size={32} className="text-emerald-500" />
-                  <span className="text-5xl font-black font-mono tracking-tighter">{getSummaryStats().prs}</span>
-                  <span className="text-[10px] font-black text-emerald-500/50 uppercase tracking-[0.2em] text-center">PRs BATIDOS</span>
-               </div>
-               <div className="glass-card p-8 flex flex-col items-center justify-center gap-3 border-zinc-800 bg-zinc-900/10">
-                  <RotateCcw size={32} className="text-zinc-500" />
-                  <span className="text-5xl font-black font-mono tracking-tighter">{getSummaryStats().missed}</span>
-                  <span className="text-[10px] font-black text-zinc-500/50 uppercase tracking-[0.2em] text-center">REPETIÇÕES</span>
-               </div>
+            <div className="grid grid-cols-2 gap-3 mb-8">
+              <div className="glass-card p-6 flex flex-col items-center justify-center gap-2 border-emerald-500/20 bg-emerald-500/5">
+                <ArrowUpCircle size={28} className="text-emerald-500" />
+                <span className="text-4xl font-black font-mono tracking-tighter">
+                  {getSummaryStats().prs}
+                </span>
+                <span className="text-[9px] font-black text-emerald-500/50 uppercase tracking-[0.2em] text-center">
+                  PRs BATIDOS
+                </span>
+              </div>
+              <div className="glass-card p-6 flex flex-col items-center justify-center gap-2 border-zinc-800 bg-zinc-900/10">
+                <RotateCcw size={28} className="text-zinc-500" />
+                <span className="text-4xl font-black font-mono tracking-tighter">
+                  {getSummaryStats().missed}
+                </span>
+                <span className="text-[9px] font-black text-zinc-500/50 uppercase tracking-[0.2em] text-center">
+                  REPETIÇÕES
+                </span>
+              </div>
             </div>
 
-            <div className="glass-card p-8 mb-12 relative border-brand-secondary/30 premium-gradient overflow-hidden">
-               <div className="absolute top-0 right-0 p-4 opacity-10">
-                 <Sparkles className="text-brand-secondary" size={60} />
-               </div>
-               <div className="flex items-center gap-3 mb-6">
-                 <div className="w-10 h-10 rounded-full bg-brand-secondary/20 flex items-center justify-center text-brand-secondary">
-                    <Zap size={20} fill="currentColor" />
-                 </div>
-                 <h3 className="text-sm font-black uppercase tracking-widest text-brand-secondary">AI COACH ANALYTICS</h3>
-               </div>
-               
-               {isAiLoading ? (
-                 <div className="flex flex-col items-center py-8 gap-4">
-                   <div className="w-10 h-10 border-4 border-brand-secondary border-t-transparent rounded-full animate-spin" />
-                   <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Analisando sua intensidade...</p>
-                 </div>
-               ) : (
-                 <p className="text-xl font-medium leading-relaxed italic text-zinc-200 indent-4">
+            <div className="glass-card p-5 sm:p-6 mb-12 relative border-brand-secondary/30 premium-gradient">
+              <div className="absolute top-[-20px] right-[-20px] p-4 opacity-[0.03] pointer-events-none">
+                <Sparkles className="text-brand-secondary" size={120} />
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 sm:mb-6 relative z-10 w-full">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-full bg-brand-secondary/20 flex items-center justify-center text-brand-secondary">
+                    <Zap size={18} fill="currentColor" />
+                  </div>
+                  <h3 className="text-[12px] sm:text-sm font-black uppercase tracking-[0.1em] text-brand-secondary">
+                    AI COACH ANALYTICS
+                  </h3>
+                </div>
+              </div>
+
+              {isAiLoading ? (
+                <div className="flex flex-col items-center justify-center py-6 gap-3">
+                  <div className="w-8 h-8 border-4 border-brand-secondary border-t-transparent rounded-full animate-spin" />
+                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest text-center">
+                    Analisando intensidade...
+                  </p>
+                </div>
+              ) : (
+                <div className="relative z-10 p-4 bg-black/20 rounded-2xl border border-white/5">
+                  <p className="text-sm sm:text-base font-medium leading-relaxed italic text-zinc-200">
                     "{aiFeedback}"
-                 </p>
-               )}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4 mb-16">
-               <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] ml-2">DATA BREAKDOWN</h4>
-               {currentSession?.logs.map(log => {
-                 const ex = activeWorkout?.exercises.find(e => e.id === log.exerciseId);
-                 const workSets = log.sets.filter(s => s.type === 'work' && s.completed);
-                 const bestSet = workSets.length > 0 ? workSets.reduce((p, c) => (c.reps >= p.reps) ? c : p) : null;
-                 const success = ex && bestSet && bestSet.reps >= ex.targetReps;
+              <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] ml-2">
+                DATA BREAKDOWN
+              </h4>
+              {currentSession?.logs.map((log) => {
+                const ex = activeWorkout?.exercises.find(
+                  (e) => e.id === log.exerciseId,
+                );
+                const workSets = log.sets.filter(
+                  (s) => s.type === "work" && s.completed,
+                );
+                const bestSet =
+                  workSets.length > 0
+                    ? workSets.reduce((p, c) => (c.reps >= p.reps ? c : p))
+                    : null;
+                const success = ex && bestSet && bestSet.reps >= ex.targetReps;
 
-                 return (
-                   <div key={log.exerciseId} className="flex items-center justify-between p-6 bg-zinc-900/30 rounded-[2rem] border border-zinc-800/50 backdrop-blur-sm">
-                      <div>
-                        <p className="font-black italic uppercase tracking-tighter text-xl">{ex?.name}</p>
-                        <p className="text-[10px] font-mono text-zinc-500 mt-1 uppercase">
-                          {bestSet ? `${bestSet.weight}KG × ${bestSet.reps}` : 'DNP'} <span className="mx-2">|</span> TARGET: {ex?.targetReps}
-                        </p>
+                return (
+                  <div
+                    key={log.exerciseId}
+                    className="flex items-center justify-between p-6 bg-zinc-900/30 rounded-[2rem] border border-zinc-800/50 backdrop-blur-sm"
+                  >
+                    <div>
+                      <p className="font-black italic uppercase tracking-tighter text-xl">
+                        {ex?.name}
+                      </p>
+                      <p className="text-[10px] font-mono text-zinc-500 mt-1 uppercase">
+                        {bestSet
+                          ? `${bestSet.weight}KG × ${bestSet.reps}`
+                          : "DNP"}{" "}
+                        <span className="mx-2">|</span> TARGET: {ex?.targetReps}
+                      </p>
+                    </div>
+                    {success ? (
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="flex flex-col items-end gap-1"
+                      >
+                        <div className="px-3 py-1 bg-emerald-500/10 text-emerald-500 font-black text-xs rounded-full border border-emerald-500/20">
+                          + {ex?.increment}KG
+                        </div>
+                        <span className="text-[8px] font-black text-emerald-500/60 uppercase">
+                          EVOLUIU
+                        </span>
+                      </motion.div>
+                    ) : (
+                      <div className="px-3 py-1 bg-zinc-800 text-zinc-500 font-black text-[10px] rounded-full uppercase">
+                        MANTER
                       </div>
-                      {success ? (
-                        <motion.div 
-                          initial={{ scale: 0 }} 
-                          animate={{ scale: 1 }} 
-                          className="flex flex-col items-end gap-1"
-                        >
-                           <div className="px-3 py-1 bg-emerald-500/10 text-emerald-500 font-black text-xs rounded-full border border-emerald-500/20">
-                             + {ex?.increment}KG
-                           </div>
-                           <span className="text-[8px] font-black text-emerald-500/60 uppercase">EVOLUIU</span>
-                        </motion.div>
-                      ) : (
-                        <div className="px-3 py-1 bg-zinc-800 text-zinc-500 font-black text-[10px] rounded-full uppercase">MANTER</div>
-                      )}
-                   </div>
-                 );
-               })}
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            <motion.button 
+            <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.95 }}
               onClick={closeSummary}
@@ -621,31 +940,35 @@ export default function App() {
       {/* Modern Floating Action Button */}
       {currentSession && !showSummary && (
         <div className="fixed bottom-0 left-0 right-0 p-8 z-[60] pointer-events-none">
-           <motion.div 
+          <motion.div
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             className="max-w-md mx-auto glass-card p-4 flex items-center justify-between shadow-[0_32px_64px_-16px_rgba(244,114,182,0.3)] pointer-events-auto border-brand-primary/40 bg-zinc-950/80"
-           >
-              <div className="flex items-center gap-4 ml-2">
-                <div className="relative">
-                   <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary">
-                     <Flame className="animate-pulse" fill="currentColor" />
-                   </div>
-                </div>
-                <div>
-                   <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">INTENSIDADE MÁXIMA</p>
-                   <p className="font-black italic text-sm uppercase tracking-tighter text-zinc-200">{activeWorkout?.title}</p>
+          >
+            <div className="flex items-center gap-4 ml-2">
+              <div className="relative">
+                <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary">
+                  <Flame className="animate-pulse" fill="currentColor" />
                 </div>
               </div>
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={finishWorkout}
-                className="bg-white text-zinc-950 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all"
-              >
-                SALVAR
-              </motion.button>
-           </motion.div>
+              <div>
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">
+                  INTENSIDADE MÁXIMA
+                </p>
+                <p className="font-black italic text-sm uppercase tracking-tighter text-zinc-200">
+                  {activeWorkout?.title}
+                </p>
+              </div>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={finishWorkout}
+              className="bg-white text-zinc-950 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all"
+            >
+              SALVAR
+            </motion.button>
+          </motion.div>
         </div>
       )}
     </div>
