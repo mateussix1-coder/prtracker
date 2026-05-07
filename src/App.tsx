@@ -56,15 +56,18 @@ export default function App() {
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
       workoutId: workout.id,
-      logs: workout.exercises.map(ex => ({
-        exerciseId: ex.id,
-        sets: [
-          { id: crypto.randomUUID(), type: 'warmup', weight: Math.round(ex.prWeight * 0.5), reps: ex.targetReps, completed: false },
-          { id: crypto.randomUUID(), type: 'warmup', weight: Math.round(ex.prWeight * 0.75), reps: Math.max(1, ex.targetReps - 2), completed: false },
-          { id: crypto.randomUUID(), type: 'work', weight: ex.prWeight || 20, reps: ex.targetReps, completed: false },
-          { id: crypto.randomUUID(), type: 'work', weight: ex.prWeight || 20, reps: ex.targetReps, completed: false },
-        ]
-      }))
+      logs: workout.exercises.map(ex => {
+        const baseWeight = ex.prWeight || 20;
+        return {
+          exerciseId: ex.id,
+          sets: [
+            { id: crypto.randomUUID(), type: 'warmup', weight: Math.max(1, Math.round(baseWeight * 0.5)), reps: ex.targetReps, completed: false },
+            { id: crypto.randomUUID(), type: 'warmup', weight: Math.max(1, Math.round(baseWeight * 0.75)), reps: Math.max(1, ex.targetReps - 2), completed: false },
+            { id: crypto.randomUUID(), type: 'work', weight: baseWeight, reps: ex.targetReps, completed: false },
+            { id: crypto.randomUUID(), type: 'work', weight: baseWeight, reps: ex.targetReps, completed: false },
+          ]
+        };
+      })
     };
     setCurrentSession(newSession);
   };
@@ -96,13 +99,12 @@ export default function App() {
 
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Você é um Coach de Musculação especialista em Treino de Alta Intensidade (HIT). 
-        Analise o treino de hoje de um atleta que foca em progressão de cargas (PR).
-        Aqui estão os resultados de hoje:\n${summaryText}\n
-        Forneça um feedback curto (máximo 4 sentenças), motivador e técnico em PORTUGUÊS. 
-        Mencione como a baixa frequência e alta intensidade exigem paciência.
-        Se ele não bateu uma meta, diga que "repetir a carga faz parte do processo". 
-        Use gírias do meio fitness de forma moderada.`,
+        contents: `Você é um Coach de Musculação especialista em Treino de Alta Intensidade (HIT/Heavy Duty). 
+        Analise o treino de hoje focado em progressão de cargas e baixo volume (o usuário treina poucas séries mas com carga máxima).
+        Resultados de hoje:\n${summaryText}\n
+        Dê um feedback em PORTUGUÊS (máximo 4 sentenças). Seja direto, técnico e motivador. 
+        Se as metas foram batidas, parabenize pela evolução. Se não, lembre que no HIT a consistência na mesma carga é o primeiro passo para o novo PR. 
+        Use termos como 'tempo sob tensão', 'sobrecarga progressiva' ou 'falha concêntrica' se fizer sentido.`,
       });
       setAiFeedback(response.text || 'O Coach está sem palavras com seu treino hoje!');
     } catch (error) {
@@ -224,7 +226,7 @@ export default function App() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
           >
             <header className="mb-12 flex justify-between items-end">
               <div>
@@ -317,6 +319,7 @@ export default function App() {
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -50 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="space-y-8"
           >
             <div className="flex items-center justify-between">
@@ -392,6 +395,7 @@ export default function App() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.1 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="pb-40"
           >
             <div className="sticky top-6 z-50 glass-card p-4 flex items-center justify-between mb-12 shadow-2xl shadow-black">
@@ -512,6 +516,7 @@ export default function App() {
             key="summary"
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="fixed inset-0 z-[100] bg-[#050505] flex flex-col pt-16 px-8 overflow-y-auto pb-12"
           >
             <header className="mb-12 flex justify-between items-center">
