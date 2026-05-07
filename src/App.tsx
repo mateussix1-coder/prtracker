@@ -25,30 +25,163 @@ import { WorkoutDay, ExerciseSet, TrainingSession, Exercise } from "./types";
 
 const MovementIcon = ({ name, index }: { name: string, index: number }) => {
   const n = name.toLowerCase();
-  let type = 'push'; 
-  if (n.includes('remada') || n.includes('puxada') || n.includes('rosca') || n.includes('flexora') || n.includes('stiff')) type = 'pull';
-  else if (n.includes('agachamento') || n.includes('leg press') || n.includes('extensora')) type = 'legs';
   
-  const yAnim = type === 'pull' ? [-4, 6, -4] : type === 'legs' ? [-6, 6, -6] : [6, -8, 6];
-  const rotAnim = type === 'pull' ? [0, -10, 0] : type === 'push' ? [0, 5, 0] : [0, 0, 0];
-  
-  return (
-    <div className="relative w-[50px] h-[50px] shrink-0 bg-gradient-to-br from-zinc-900 to-[#0a0a0a] border border-zinc-800 rounded-[18px] flex items-center justify-center overflow-hidden shadow-inner">
-       <span className="absolute text-[40px] -right-2 -bottom-2 font-black italic text-zinc-800/40 leading-none select-none z-0">{index}</span>
-       
-       <motion.div
-         animate={{ y: yAnim, rotate: rotAnim }}
-         transition={{ 
-            duration: 2.5, 
-            repeat: Infinity, 
-            ease: "easeInOut",
-         }}
-         className="relative z-10 flex items-center drop-shadow-[0_4px_6px_rgba(0,0,0,0.8)]"
+  let IconContent;
+  let transitionProps = { duration: 2.5, repeat: Infinity, ease: "easeInOut" };
+
+  if (n.includes('puxada') || n.includes('pulley')) {
+    // Cable pull down
+    IconContent = (
+      <div className="flex flex-col items-center -mt-2">
+        <motion.div 
+           className="w-0.5 bg-zinc-500 origin-top" 
+           animate={{ height: [8, 22, 8] }}
+           transition={transitionProps}
+        />
+        <motion.div
+           animate={{ y: [0, 14, 0] }}
+           transition={transitionProps}
+        >
+          <div className="flex items-start">
+             <div className="w-1.5 h-5 bg-zinc-300 rounded-full origin-top -rotate-45 translate-x-[3px]" />
+             <div className="w-1.5 h-5 bg-zinc-300 rounded-full origin-top rotate-45 -translate-x-[3px]" />
+          </div>
+        </motion.div>
+      </div>
+    );
+  } else if (n.includes('supino')) {
+    // Barbell Push
+    IconContent = (
+      <motion.div
+        animate={{ y: [6, -6, 6] }}
+        transition={transitionProps}
+        className="flex items-center shadow-lg"
+      >
+         <div className="w-1 h-4 bg-zinc-400 rounded-sm" />
+         <div className="w-1.5 h-6 bg-gradient-to-b from-brand-primary to-rose-600 rounded-sm -ml-0.5" />
+         <div className="w-6 h-1.5 bg-zinc-300" />
+         <div className="w-1.5 h-6 bg-gradient-to-b from-brand-primary to-rose-600 rounded-sm -mr-0.5" />
+         <div className="w-1 h-4 bg-zinc-400 rounded-sm" />
+      </motion.div>
+    );
+  } else if (n.includes('remada')) {
+    // Cable pull horizontal
+    IconContent = (
+      <motion.div
+        animate={{ x: [6, -6, 6] }}
+        transition={transitionProps}
+        className="flex items-center gap-1"
+      >
+        <div className="w-6 h-0.5 bg-zinc-500 shadow-sm" />
+        <div className="w-2.5 h-6 bg-zinc-300 rounded-sm shadow-md" />
+      </motion.div>
+    );
+  } else if (n.includes('agachamento') || n.includes('leg press') || n.includes('stiff') || n.includes('pélvica')) {
+    // Barbell Squat / Heavy lower body
+    IconContent = (
+      <motion.div
+        animate={{ y: [-6, 6, -6] }}
+        transition={transitionProps}
+        className="flex items-center shadow-xl"
+      >
+         <div className="w-1 h-5 bg-zinc-400 rounded-sm" />
+         <div className="w-2 h-8 bg-gradient-to-b from-brand-primary to-rose-600 rounded-sm -ml-0.5" />
+         <div className="w-8 h-1.5 bg-zinc-300" />
+         <div className="w-2 h-8 bg-gradient-to-b from-brand-primary to-rose-600 rounded-sm -mr-0.5" />
+         <div className="w-1 h-5 bg-zinc-400 rounded-sm" />
+      </motion.div>
+    );
+  } else if (n.includes('elevação lateral') || n.includes('crucifixo')) {
+    // Fly / Lateral Raise
+    IconContent = (
+      <div className="flex gap-1.5 relative top-2">
+         {/* Left DB */}
+         <motion.div
+           animate={{ rotate: [0, 60, 0], x: [0, -6, 0], y: [0, -8, 0] }}
+           transition={transitionProps}
+           className="flex items-center origin-right shadow-md"
+         >
+            <div className="w-1.5 h-3 bg-brand-primary rounded-sm" />
+            <div className="w-2.5 h-1 bg-zinc-300" />
+            <div className="w-1.5 h-3 bg-brand-primary rounded-sm" />
+         </motion.div>
+         {/* Right DB */}
+         <motion.div
+           animate={{ rotate: [0, -60, 0], x: [0, 6, 0], y: [0, -8, 0] }}
+           transition={transitionProps}
+           className="flex items-center origin-left shadow-md"
+         >
+            <div className="w-1.5 h-3 bg-brand-primary rounded-sm" />
+            <div className="w-2.5 h-1 bg-zinc-300" />
+            <div className="w-1.5 h-3 bg-brand-primary rounded-sm" />
+         </motion.div>
+      </div>
+    );
+  } else if (n.includes('extensora') || n.includes('flexora')) {
+    // Leg Extension / Curl (rotating arm)
+    IconContent = (
+      <div className="flex flex-col items-center">
+        <div className="w-3 h-3 rounded-full bg-zinc-700 mb-[-6px] z-10" />
+        <motion.div
+          animate={n.includes('extensora') ? { rotate: [45, -10, 45] } : { rotate: [0, 60, 0] }}
+          transition={transitionProps}
+          className="flex items-center origin-left -ml-2"
+        >
+          <div className="w-6 h-1.5 bg-zinc-500 rounded-full" />
+          <div className="w-4 h-5 bg-brand-primary rounded-md -ml-2 shadow-md" />
+        </motion.div>
+      </div>
+    );
+  } else if (n.includes('adutora') || n.includes('abdutora')) {
+    // Machine Pads spreading
+    const isAdutora = n.includes('adutora');
+    IconContent = (
+      <div className="flex gap-1 relative">
+         <motion.div
+           animate={{ x: isAdutora ? [-6, 0, -6] : [0, -6, 0] }}
+           transition={transitionProps}
+           className="w-3 h-6 bg-gradient-to-r from-brand-primary to-rose-600 rounded-md shadow-md"
+         />
+         <motion.div
+           animate={{ x: isAdutora ? [6, 0, 6] : [0, 6, 0] }}
+           transition={transitionProps}
+           className="w-3 h-6 bg-gradient-to-l from-brand-primary to-rose-600 rounded-md shadow-md"
+         />
+      </div>
+    );
+  } else if (n.includes('panturrilha')) {
+    // Calf Raise
+     IconContent = (
+      <motion.div
+        animate={{ y: [4, -4, 4] }}
+        transition={transitionProps}
+        className="flex flex-col items-center gap-1.5"
+      >
+         <div className="w-5 h-4 bg-gradient-to-b from-brand-primary to-rose-500 rounded-md shadow-md" />
+         <div className="w-8 h-1 bg-zinc-400 rounded-full" />
+      </motion.div>
+    );
+  } else {
+    // Default Dumbbell Curl (roscas, francês, others)
+    IconContent = (
+      <motion.div
+         animate={{ rotate: [-45, 45, -45] }}
+         transition={transitionProps}
+         className="flex items-center drop-shadow-md origin-bottom-left"
        >
           <div className="w-[8px] h-5 bg-gradient-to-br from-brand-primary to-rose-700 rounded-sm border-t border-l border-white/20 shadow-[inset_-2px_-2px_4px_rgba(0,0,0,0.5)]" />
           <div className="w-4 h-1.5 bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-600 shadow-[inset_0_2px_2px_rgba(255,255,255,0.8)]" />
           <div className="w-[8px] h-5 bg-gradient-to-br from-brand-primary to-rose-700 rounded-sm border-t border-r border-white/20 shadow-[inset_2px_-2px_4px_rgba(0,0,0,0.5)]" />
        </motion.div>
+    );
+  }
+
+  return (
+    <div className="relative w-[50px] h-[50px] shrink-0 bg-gradient-to-br from-zinc-900 to-[#0a0a0a] border border-zinc-800 rounded-[18px] flex items-center justify-center overflow-hidden shadow-inner">
+       <span className="absolute text-[40px] -right-2 -bottom-2 font-black italic text-zinc-800/40 leading-none select-none z-0">{index}</span>
+       <div className="relative z-10 flex items-center justify-center w-full h-full">
+         {IconContent}
+       </div>
     </div>
   );
 };
@@ -106,6 +239,26 @@ export default function App() {
       date: new Date().toISOString(),
       workoutId: workout.id,
       logs: workout.exercises.map((ex) => {
+        let previousLog = null;
+        for (const s of history) {
+           const log = s.logs.find(l => l.exerciseId === ex.id);
+           if (log) {
+             previousLog = log;
+             break;
+           }
+        }
+
+        if (previousLog && previousLog.sets && previousLog.sets.length > 0) {
+           return {
+             exerciseId: ex.id,
+             sets: previousLog.sets.map(s => ({
+               ...s,
+               id: crypto.randomUUID(),
+               completed: false
+             }))
+           };
+        }
+
         const baseWeight = ex.prWeight || 20;
         return {
           exerciseId: ex.id,
@@ -164,30 +317,38 @@ export default function App() {
     });
     setCurrentSession({ ...currentSession, logs: newLogs });
 
-    if (updates.completed === true) {
-      const activeWorkout = workouts.find((w) => w.id === activeWorkoutId);
-      const exercise = activeWorkout?.exercises.find(
-        (e) => e.id === exerciseId,
-      );
-      const log = currentSession.logs.find((l) => l.exerciseId === exerciseId);
-      const setBeforeUpdate = log?.sets.find((s) => s.id === setId);
+    const activeWorkout = workouts.find((w) => w.id === activeWorkoutId);
+    const exercise = activeWorkout?.exercises.find((e) => e.id === exerciseId);
+    const log = currentSession.logs.find((l) => l.exerciseId === exerciseId);
+    const setBeforeUpdate = log?.sets.find((s) => s.id === setId);
 
-      if (exercise && setBeforeUpdate && setBeforeUpdate.type === "work") {
-        const expectedWeight =
-          updates.weight !== undefined
-            ? updates.weight
-            : setBeforeUpdate.weight;
-        const expectedReps =
-          updates.reps !== undefined ? updates.reps : setBeforeUpdate.reps;
+    if (exercise && setBeforeUpdate && setBeforeUpdate.type === "work") {
+      const expectedWeight =
+        updates.weight !== undefined ? updates.weight : setBeforeUpdate.weight;
+      const expectedReps =
+        updates.reps !== undefined ? updates.reps : setBeforeUpdate.reps;
+      const expectedCompleted =
+        updates.completed !== undefined ? updates.completed : setBeforeUpdate.completed;
 
-        if (
-          expectedWeight > 0 &&
-          expectedReps > 0 &&
-          (expectedWeight > exercise.prWeight || (expectedWeight === exercise.prWeight && expectedReps >= exercise.targetReps))
-        ) {
-          setPrAlert("🎉 " + exercise.name + " (" + expectedWeight + "KG)");
-          setTimeout(() => setPrAlert(null), 4000);
-        }
+      const isPrNow =
+        expectedCompleted &&
+        expectedWeight > 0 &&
+        expectedReps > 0 &&
+        (expectedWeight > exercise.prWeight ||
+          (expectedWeight === exercise.prWeight &&
+            expectedReps >= exercise.targetReps));
+
+      const wasPrBefore =
+        setBeforeUpdate.completed &&
+        setBeforeUpdate.weight > 0 &&
+        setBeforeUpdate.reps > 0 &&
+        (setBeforeUpdate.weight > exercise.prWeight ||
+          (setBeforeUpdate.weight === exercise.prWeight &&
+            setBeforeUpdate.reps >= exercise.targetReps));
+
+      if (isPrNow && !wasPrBefore) {
+        setPrAlert("🎉 " + exercise.name + " (" + expectedWeight + "KG)");
+        setTimeout(() => setPrAlert(null), 4000);
       }
     }
   };
@@ -195,6 +356,7 @@ export default function App() {
   const getAiCoachFeedback = async (
     session: TrainingSession,
     exercises: Exercise[],
+    prsBatidos: number,
   ) => {
     setIsAiLoading(true);
     setAiFeedback("");
@@ -216,20 +378,22 @@ export default function App() {
           );
           const best =
             workSets.length > 0
-              ? workSets.reduce((p, c) => (c.weight >= p.weight ? c : p))
+              ? workSets.reduce((p, c) => (c.weight > p.weight || (c.weight === p.weight && c.reps >= p.reps) ? c : p))
               : null;
           return `${ex?.name}: ${best ? `${best.weight}kg x ${best.reps} (Meta: ${ex?.targetReps})` : "Não concluído"}`;
         })
         .join("\n");
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Você é um Coach de Musculação especialista em Treino de Alta Intensidade (HIT/Heavy Duty). 
-        Analise o treino de hoje focado em progressão de cargas e baixo volume (o usuário treina poucas séries mas com carga máxima).
+        model: "gemini-3.5-flash",
+        contents: `Você é um Coach de Musculação estilo "Tóxico/Sarcástico" mas focado em HIT/Heavy Duty. 
+        Analise o treino de hoje focado em progressão de cargas e baixo volume.
+        O usuário bateu ${prsBatidos} PRs (Recordes Pessoais/Metas) hoje.
         Resultados de hoje:\n${summaryText}\n
-        Dê um feedback em PORTUGUÊS (máximo 4 sentenças). Seja direto, técnico e motivador. 
-        Se as metas foram batidas, parabenize pela evolução. Se não, lembre que no HIT a consistência na mesma carga é o primeiro passo para o novo PR. 
-        Use termos como 'tempo sob tensão', 'sobrecarga progressiva' ou 'falha concêntrica' se fizer sentido.`,
+        Dê um feedback em PORTUGUÊS (máximo 3 ou 4 sentenças). 
+        Se as metas (PRs) foram batidas (PRs > 0), elogie bastante, diga que o cara é um monstro e uma máquina de superar limites. 
+        Se ele NÃO bateu PR em nada (PRs = 0), seja extremamente sarcástico, zombeteiro e dureza (ex: "Tá inútil hoje, hein?", "Fraco demais", "Desse jeito vai morrer frango!"). Varie sempre as frases para não repetir. 
+        Seja intenso e use gírias do meio maromba.`,
       });
       setAiFeedback(
         response.text || "O Coach está sem palavras com seu treino hoje!",
@@ -246,6 +410,9 @@ export default function App() {
   const finishWorkout = () => {
     if (!currentSession) return;
 
+    let sessionPrs = 0;
+    let sessionMissed = 0;
+
     const newWorkouts = [...workouts];
     const workoutIdx = newWorkouts.findIndex(
       (w) => w.id === currentSession.workoutId,
@@ -261,20 +428,29 @@ export default function App() {
           );
           if (workSets.length > 0) {
             const bestSet = workSets.reduce((prev, curr) =>
-              curr.weight >= prev.weight && curr.reps >= prev.reps
+              curr.weight > prev.weight ||
+              (curr.weight === prev.weight && curr.reps >= prev.reps)
                 ? curr
                 : prev,
             );
 
             let newPrWeight = ex.prWeight;
-            if (bestSet.reps >= ex.targetReps) {
+
+            if (
+              bestSet.weight > ex.prWeight ||
+              (bestSet.weight === ex.prWeight && bestSet.reps >= ex.targetReps)
+            ) {
+              sessionPrs++;
               newPrWeight =
                 bestSet.weight +
                 (bestSet.reps > ex.targetReps
                   ? ex.increment * 2
                   : ex.increment);
             } else if (bestSet.weight > ex.prWeight) {
+              sessionPrs++;
               newPrWeight = bestSet.weight;
+            } else {
+              sessionMissed++;
             }
 
             return {
@@ -290,11 +466,14 @@ export default function App() {
       newWorkouts[workoutIdx] = workout;
       setWorkouts(newWorkouts);
 
+      // We store it directly in currentSession so getSummaryStats can just read it back!
+      currentSession.stats = { prs: sessionPrs, missed: sessionMissed };
+
       const sessionWithSummary = {
         ...currentSession,
         date: new Date().toISOString(),
       };
-      getAiCoachFeedback(sessionWithSummary, workout.exercises);
+      getAiCoachFeedback(sessionWithSummary, workout.exercises, sessionPrs);
     }
 
     setHistory([currentSession, ...history]);
@@ -342,19 +521,9 @@ export default function App() {
   const activeWorkout = workouts.find((w) => w.id === activeWorkoutId);
 
   const getSummaryStats = () => {
+    if (currentSession?.stats) return currentSession.stats;
     if (!currentSession || !activeWorkout) return { prs: 0, missed: 0 };
-    let prs = 0;
-    let missed = 0;
-    currentSession.logs.forEach((log) => {
-      const ex = activeWorkout.exercises.find((e) => e.id === log.exerciseId);
-      const workSets = log.sets.filter((s) => s.type === "work" && s.completed);
-      if (workSets.length > 0) {
-        const best = workSets.reduce((p, c) => (c.reps >= p.reps ? c : p));
-        if (ex && best.reps >= ex.targetReps) prs++;
-        else missed++;
-      }
-    });
-    return { prs, missed };
+    return { prs: 0, missed: 0 };
   };
 
   return (
@@ -838,31 +1007,29 @@ export default function App() {
               </div>
             </div>
 
-            <div className="glass-card p-5 sm:p-6 mb-12 relative border-brand-secondary/30 premium-gradient">
-              <div className="absolute top-[-20px] right-[-20px] p-4 opacity-[0.03] pointer-events-none">
+            <div className="glass-card p-5 sm:p-6 mb-12 relative border-brand-secondary/30 premium-gradient overflow-hidden">
+              <div className="absolute top-[-20px] right-[-20px] opacity-[0.05] pointer-events-none">
                 <Sparkles className="text-brand-secondary" size={120} />
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 sm:mb-6 relative z-10 w-full">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-full bg-brand-secondary/20 flex items-center justify-center text-brand-secondary">
-                    <Zap size={18} fill="currentColor" />
-                  </div>
-                  <h3 className="text-[12px] sm:text-sm font-black uppercase tracking-[0.1em] text-brand-secondary">
-                    AI COACH ANALYTICS
-                  </h3>
+              <div className="flex items-center gap-3 mb-4 relative z-10">
+                <div className="w-8 h-8 shrink-0 rounded-full bg-brand-secondary/20 flex items-center justify-center text-brand-secondary shadow-[0_0_15px_rgba(20,184,166,0.2)]">
+                  <Zap size={16} fill="currentColor" />
                 </div>
+                <h3 className="text-[11px] sm:text-sm font-black uppercase tracking-[0.1em] text-brand-secondary">
+                  AI COACH ANALYTICS
+                </h3>
               </div>
 
               {isAiLoading ? (
-                <div className="flex flex-col items-center justify-center py-6 gap-3">
-                  <div className="w-8 h-8 border-4 border-brand-secondary border-t-transparent rounded-full animate-spin" />
-                  <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest text-center">
+                <div className="flex flex-col items-center justify-center py-8 gap-3 relative z-10">
+                  <div className="w-8 h-8 border-4 border-brand-secondary border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(20,184,166,0.3)]" />
+                  <p className="text-[10px] text-zinc-400 font-black uppercase tracking-widest text-center mt-2 animate-pulse">
                     Analisando intensidade...
                   </p>
                 </div>
               ) : (
-                <div className="relative z-10 p-4 bg-black/20 rounded-2xl border border-white/5">
-                  <p className="text-sm sm:text-base font-medium leading-relaxed italic text-zinc-200">
+                <div className="relative z-10 p-4 sm:p-5 bg-black/40 rounded-2xl border border-brand-secondary/10 shadow-inner">
+                  <p className="text-xs sm:text-sm font-medium leading-relaxed italic text-zinc-200">
                     "{aiFeedback}"
                   </p>
                 </div>
