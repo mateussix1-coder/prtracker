@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+
+    // User Profile
+    function isValidUser(data) {
+      return data.keys().hasAll(['createdAt'])
+          && data.keys().size() <= 2
+          && data.createdAt == request.time
+          && (data.get('email', '') is string || data.get('email', '') == null);
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
+      // we do not allow update/delete of user profile in this schema yet, to be perfectly secure
+    }
+
+    // Workout
+    function isValidWorkout(data, userId) {
+      return data.keys().hasAll(['id', 'dayName', 'title', 'userId', 'exercises'])
+          && data.id is string && data.id.size() <= 128
+          && data.dayName is string && data.dayName.size() <= 100
+          && data.title is string && data.title.size() <= 200
+          && data.userId == userId
+          && data.exercises is list && data.exercises.size() <= 100
+          && (data.get('createdAt', request.time) == request.time)
+          && (data.get('updatedAt', request.time) == request.time);
+    }
+    
+    match /users/{userId}/workouts/{workoutId} {
+      allow get: if isOwner(userId) && isValidId(workoutId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(workoutId) && isValidWorkout(incoming(), userId) && incoming().createdAt == request.time;
+      allow update: if isOwner(userId) && isValidId(workoutId) && isValidWorkout(incoming(), userId) && incoming().updatedAt == request.time && incoming().id == existing().id && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt && incoming().diff(existing()).affectedKeys().hasOnly(['exercises', 'dayName', 'title', 'updatedAt']);
+      allow delete: if isOwner(userId) && isValidId(workoutId);
+    }
+
+    // Training Session
+    function isValidSession(data, userId) {
+      return data.keys().hasAll(['id', 'workoutId', 'userId', 'date', 'logs'])
+          && data.id is string && data.id.size() <= 128
+          && data.workoutId is string && data.workoutId.size() <= 128
+          && data.userId == userId
+          && data.date is string && data.date.size() <= 100
+          && data.logs is list && data.logs.size() <= 100
+          && (data.get('createdAt', request.time) == request.time);
+    }
+
+    match /users/{userId}/history/{sessionId} {
+      allow get: if isOwner(userId) && isValidId(sessionId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(sessionId) && isValidSession(incoming(), userId) && incoming().createdAt == request.time && exists(/databases/$(database)/documents/users/$(userId)/workouts/$(incoming().workoutId));
+      allow delete: if isOwner(userId) && isValidId(sessionId);
+    }
+  }
+}

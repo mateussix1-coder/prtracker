@@ -3,7 +3,7 @@ import { WorkoutDay } from './types';
 export const INITIAL_WORKOUTS: WorkoutDay[] = [
   {
     id: 'upper-1',
-    title: 'Upper 1',
+    title: 'Superior 1',
     dayName: 'Segunda-feira',
     exercises: [
       { id: 'u1-1', name: 'Remada Curvada', targetReps: 6, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
@@ -17,7 +17,7 @@ export const INITIAL_WORKOUTS: WorkoutDay[] = [
   },
   {
     id: 'lower-1',
-    title: 'Lower 1',
+    title: 'Inferior 1',
     dayName: 'Terça-feira',
     exercises: [
       { id: 'l1-1', name: 'Stiff', targetReps: 8, increment: 4, lastWeight: 0, lastReps: 0, prWeight: 0 },
@@ -30,7 +30,7 @@ export const INITIAL_WORKOUTS: WorkoutDay[] = [
   },
   {
     id: 'upper-2',
-    title: 'Upper 2',
+    title: 'Superior 2',
     dayName: 'Quinta-feira',
     exercises: [
       { id: 'u2-1', name: 'Supino Reto', targetReps: 6, increment: 2, lastWeight: 0, lastReps: 0, prWeight: 0 },
@@ -44,7 +44,7 @@ export const INITIAL_WORKOUTS: WorkoutDay[] = [
   },
   {
     id: 'lower-2',
-    title: 'Lower 2',
+    title: 'Inferior 2',
     dayName: 'Sexta-feira',
     exercises: [
       { id: 'l2-1', name: 'Agachamento Livre', targetReps: 6, increment: 4, lastWeight: 0, lastReps: 0, prWeight: 0 },

@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profile",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["createdAt"]
+    },
+    "workout": {
+      "title": "Workout",
+      "description": "A customized workout day the user created",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "dayName": { "type": "string" },
+        "title": { "type": "string" },
+        "userId": { "type": "string" },
+        "exercises": { 
+          "type": "array",
+          "description": "The exercises array"
+        },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "dayName", "title", "userId", "exercises"]
+    },
+    "trainingSession": {
+      "title": "Training Session",
+      "description": "A completed workout session log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workoutId": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string", "description": "ISO date string" },
+        "logs": {
+          "type": "array"
+        },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "workoutId", "userId", "date", "logs"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/user" },
+      "description": "User profiles"
+    },
+    "/users/{userId}/workouts/{workoutId}": {
+      "schema": { "$ref": "#/entities/workout" },
+      "description": "User's customized workouts"
+    },
+    "/users/{userId}/history/{sessionId}": {
+      "schema": { "$ref": "#/entities/trainingSession" },
+      "description": "User's workout history"
+    }
+  }
+}

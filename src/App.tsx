@@ -1,27 +1,12 @@
 import { useState, useEffect, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { GoogleGenAI } from "@google/genai";
-import {
-  Trophy,
-  Dumbbell,
-  History,
-  ChevronRight,
-  CheckCircle2,
-  Zap,
-  Flame,
-  Save,
-  Calendar,
-  Download,
-  Upload,
-  RotateCcw,
-  Sparkles,
-  AlertTriangle,
-  ArrowUpCircle,
-  X,
-  Target,
-} from "lucide-react";
+import { Trophy, Dumbbell, History, ChevronRight, CheckCircle2, Zap, Flame, Save, Calendar, Download, Upload, RotateCcw, Sparkles, AlertTriangle, ArrowUpCircle, X, Target, Edit2, Trash2, Plus, LogOut, LogIn } from "lucide-react";
 import { INITIAL_WORKOUTS } from "./constants";
 import { WorkoutDay, ExerciseSet, TrainingSession, Exercise } from "./types";
+import { auth, db } from "./firebase";
+import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from "firebase/auth";
+import { collection, doc, setDoc, getDocs, getDoc } from "firebase/firestore";
 
 const MovementIcon = ({ name, index }: { name: string, index: number }) => {
   const n = name.toLowerCase();
@@ -187,6 +172,53 @@ const MovementIcon = ({ name, index }: { name: string, index: number }) => {
 };
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+      if (u) {
+        // sync from firestore
+        try {
+          const wSnapshot = await getDocs(collection(db, `users/${u.uid}/workouts`));
+          const wList = wSnapshot.docs.map(doc => doc.data() as WorkoutDay);
+          if (wList.length > 0) {
+            setWorkouts(wList);
+          } else {
+             // Create default ones in firestore
+             for (const w of INITIAL_WORKOUTS) {
+               await setDoc(doc(db, `users/${u.uid}/workouts`, w.id), { ...w, userId: u.uid, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+             }
+          }
+          
+          const hSnapshot = await getDocs(collection(db, `users/${u.uid}/history`));
+          const hList = hSnapshot.docs.map(doc => doc.data() as TrainingSession).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          if (hList.length > 0) {
+            setHistory(hList);
+          }
+        } catch (e) {
+          console.error("Erro sincronizando do Firestore", e);
+        }
+      }
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const login = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (e: any) {
+      if (e.code === 'auth/popup-closed-by-user') {
+        console.log("Login cancelado pelo usuário.");
+        return;
+      }
+      console.error("Erro no login:", e);
+    }
+  };
+
   const [workouts, setWorkouts] = useState<WorkoutDay[]>(() => {
     const saved = localStorage.getItem("pr_tracker_workouts");
     return saved ? JSON.parse(saved) : INITIAL_WORKOUTS;
@@ -196,6 +228,7 @@ export default function App() {
     const saved = localStorage.getItem("pr_tracker_active_id");
     return saved ? JSON.parse(saved) : null;
   });
+  const [editingWorkout, setEditingWorkout] = useState<WorkoutDay | null>(null);
   const [currentSession, setCurrentSession] = useState<TrainingSession | null>(
     () => {
       const saved = localStorage.getItem("pr_tracker_session");
@@ -204,6 +237,7 @@ export default function App() {
   );
   const [showHistory, setShowHistory] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [pendingSave, setPendingSave] = useState<{ newWorkouts: WorkoutDay[], session: TrainingSession } | null>(null);
   const [aiFeedback, setAiFeedback] = useState<string>("");
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [history, setHistory] = useState<TrainingSession[]>(() => {
@@ -212,6 +246,56 @@ export default function App() {
   });
 
   const [prAlert, setPrAlert] = useState<string | null>(null);
+  const [restTimer, setRestTimer] = useState<number | null>(null);
+  const [showAbortConfirm, setShowAbortConfirm] = useState(false);
+  const [isAddingEx, setIsAddingEx] = useState(false);
+  const [newExName, setNewExName] = useState("");
+  const [newExTarget, setNewExTarget] = useState(8);
+  const [newExPr, setNewExPr] = useState(20);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (restTimer !== null && restTimer > 0) {
+      interval = setInterval(() => {
+        setRestTimer((prev) => (prev !== null && prev > 1 ? prev - 1 : null));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [restTimer]);
+
+  const addSet = (exerciseId: string, type: "warmup" | "work") => {
+    if (!currentSession) return;
+    const activeWorkout = workouts.find((w) => w.id === activeWorkoutId);
+    const exercise = activeWorkout?.exercises.find((e) => e.id === exerciseId);
+    if (!exercise) return;
+
+    const newLogs = currentSession.logs.map((log) => {
+      if (log.exerciseId === exerciseId) {
+        const lastSet = log.sets.length > 0 ? log.sets[log.sets.length - 1] : null;
+        const newSet: ExerciseSet = {
+          id: crypto.randomUUID(),
+          type: type,
+          weight: lastSet ? lastSet.weight : exercise.prWeight,
+          reps: type === "warmup" ? exercise.targetReps : 0,
+          completed: false,
+        };
+        return { ...log, sets: [...log.sets, newSet] };
+      }
+      return log;
+    });
+    setCurrentSession({ ...currentSession, logs: newLogs });
+  };
+
+  const removeSet = (exerciseId: string, setId: string) => {
+    if (!currentSession) return;
+    const newLogs = currentSession.logs.map((log) => {
+      if (log.exerciseId === exerciseId) {
+        return { ...log, sets: log.sets.filter((s) => s.id !== setId) };
+      }
+      return log;
+    });
+    setCurrentSession({ ...currentSession, logs: newLogs });
+  };
 
   useEffect(() => {
     localStorage.setItem("pr_tracker_workouts", JSON.stringify(workouts));
@@ -239,27 +323,22 @@ export default function App() {
       date: new Date().toISOString(),
       workoutId: workout.id,
       logs: workout.exercises.map((ex) => {
-        let previousLog = null;
+        let lastWorkWeight = ex.prWeight || 20;
+        let lastWorkReps = ex.targetReps;
+        
         for (const s of history) {
            const log = s.logs.find(l => l.exerciseId === ex.id);
-           if (log) {
-             previousLog = log;
-             break;
+           if (log && log.sets) {
+             const workSets = log.sets.filter(ws => ws.type === "work");
+             if (workSets.length > 0) {
+               lastWorkWeight = workSets[0].weight;
+               lastWorkReps = workSets[0].reps;
+               break;
+             }
            }
         }
 
-        if (previousLog && previousLog.sets && previousLog.sets.length > 0) {
-           return {
-             exerciseId: ex.id,
-             sets: previousLog.sets.map(s => ({
-               ...s,
-               id: crypto.randomUUID(),
-               completed: false
-             }))
-           };
-        }
-
-        const baseWeight = ex.prWeight || 20;
+        const baseWeight = lastWorkWeight;
         return {
           exerciseId: ex.id,
           sets: [
@@ -267,28 +346,28 @@ export default function App() {
               id: crypto.randomUUID(),
               type: "warmup",
               weight: Math.max(1, Math.round(baseWeight * 0.5)),
-              reps: ex.targetReps,
+              reps: Math.min(ex.targetReps, 8),
               completed: false,
             },
             {
               id: crypto.randomUUID(),
               type: "warmup",
-              weight: Math.max(1, Math.round(baseWeight * 0.75)),
-              reps: Math.max(1, ex.targetReps - 2),
+              weight: Math.max(1, Math.round(baseWeight * 0.7)),
+              reps: Math.min(ex.targetReps, Math.round(ex.targetReps * 0.7)),
+              completed: false,
+            },
+            {
+              id: crypto.randomUUID(),
+              type: "warmup",
+              weight: Math.max(1, Math.round(baseWeight * 0.85)),
+              reps: 2,
               completed: false,
             },
             {
               id: crypto.randomUUID(),
               type: "work",
               weight: baseWeight,
-              reps: ex.targetReps,
-              completed: false,
-            },
-            {
-              id: crypto.randomUUID(),
-              type: "work",
-              weight: baseWeight,
-              reps: ex.targetReps,
+              reps: lastWorkReps,
               completed: false,
             },
           ],
@@ -327,11 +406,13 @@ export default function App() {
         updates.weight !== undefined ? updates.weight : setBeforeUpdate.weight;
       const expectedReps =
         updates.reps !== undefined ? updates.reps : setBeforeUpdate.reps;
-      const expectedCompleted =
-        updates.completed !== undefined ? updates.completed : setBeforeUpdate.completed;
+
+      // Start rest timer if checking as completed
+      if (updates.completed === true && !setBeforeUpdate.completed) {
+        setRestTimer(180); // 3 minutes default for HIT
+      }
 
       const isPrNow =
-        expectedCompleted &&
         expectedWeight > 0 &&
         expectedReps > 0 &&
         (expectedWeight > exercise.prWeight ||
@@ -339,7 +420,6 @@ export default function App() {
             expectedReps >= exercise.targetReps));
 
       const wasPrBefore =
-        setBeforeUpdate.completed &&
         setBeforeUpdate.weight > 0 &&
         setBeforeUpdate.reps > 0 &&
         (setBeforeUpdate.weight > exercise.prWeight ||
@@ -362,9 +442,9 @@ export default function App() {
     setAiFeedback("");
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === "undefined") {
+      if (!apiKey || apiKey === "undefined" || apiKey === "") {
         setAiFeedback(
-          "Coach IA indisponível: Chave da API GEMINI_API_KEY não configurada no ambiente (Vercel). Mas continue treinando pesado!",
+          "Coach IA indisponível: Chave da API GEMINI_API_KEY não configurada no ambiente. Mas continue treinando pesado!",
         );
         return;
       }
@@ -385,20 +465,22 @@ export default function App() {
         .join("\n");
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: `Você é um Coach de Musculação estilo "Tóxico/Sarcástico" mas focado em HIT/Heavy Duty. 
+        model: "gemini-1.5-flash",
+        contents: `Você é um Coach de Musculação estilo "Tóxico/Sarcástico" focado em HIT/Heavy Duty. 
         Analise o treino de hoje focado em progressão de cargas e baixo volume.
         O usuário bateu ${prsBatidos} PRs (Recordes Pessoais/Metas) hoje.
         Resultados de hoje:\n${summaryText}\n
-        Dê um feedback em PORTUGUÊS (máximo 3 ou 4 sentenças). 
-        Se as metas (PRs) foram batidas (PRs > 0), elogie bastante, diga que o cara é um monstro e uma máquina de superar limites. 
-        Se ele NÃO bateu PR em nada (PRs = 0), seja extremamente sarcástico, zombeteiro e dureza (ex: "Tá inútil hoje, hein?", "Fraco demais", "Desse jeito vai morrer frango!"). Varie sempre as frases para não repetir. 
-        Seja intenso e use gírias do meio maromba.`,
+        
+        Seja BEM CURTO (1 a 2 frases no máximo) e BEM AGRESSIVO (xingue se for preciso):
+        - Se bateu 1 ou mais PRs: Elogie de forma dura/agressiva (ex: "Parabéns seu merda, fez o mínimo esperado.").
+        - Se bateu 0 PRs: Xingue sem dó, diga que ele foi um lixo, fraco, passeou na academia, etc. Varie sempre!
+        Fale em PORTUGUÊS.`,
       });
       setAiFeedback(
         response.text || "O Coach está sem palavras com seu treino hoje!",
       );
     } catch (error) {
+      console.error("AI Coach Error:", error);
       setAiFeedback(
         "Erro ao conectar com o Coach IA. Mas continue treinando pesado!",
       );
@@ -407,7 +489,7 @@ export default function App() {
     }
   };
 
-  const finishWorkout = () => {
+  const previewSummary = () => {
     if (!currentSession) return;
 
     let sessionPrs = 0;
@@ -464,27 +546,48 @@ export default function App() {
         return ex;
       });
       newWorkouts[workoutIdx] = workout;
-      setWorkouts(newWorkouts);
-
-      // We store it directly in currentSession so getSummaryStats can just read it back!
+      
       currentSession.stats = { prs: sessionPrs, missed: sessionMissed };
 
       const sessionWithSummary = {
         ...currentSession,
         date: new Date().toISOString(),
       };
+      
+      setPendingSave({ newWorkouts, session: sessionWithSummary });
       getAiCoachFeedback(sessionWithSummary, workout.exercises, sessionPrs);
     }
 
-    setHistory([currentSession, ...history]);
     setShowSummary(true);
   };
 
   const closeSummary = () => {
     setShowSummary(false);
+  };
+
+  const saveAndCloseWorkout = async () => {
+    if (pendingSave) {
+       setWorkouts(pendingSave.newWorkouts);
+       setHistory([pendingSave.session, ...history]);
+       
+       if (user) {
+         try {
+           // Save modified workouts
+           for (const w of pendingSave.newWorkouts) {
+             await setDoc(doc(db, `users/${user.uid}/workouts`, w.id), { ...w, userId: user.uid, updatedAt: new Date().toISOString() }, { merge: true });
+           }
+           // Save session
+           await setDoc(doc(db, `users/${user.uid}/history`, pendingSave.session.id), { ...pendingSave.session, userId: user.uid, createdAt: new Date().toISOString(), workoutId: pendingSave.session.workoutId });
+         } catch (e) {
+           console.error("Error saving to firestore", e);
+         }
+       }
+    }
+    setShowSummary(false);
     setActiveWorkoutId(null);
     setCurrentSession(null);
     setAiFeedback("");
+    setPendingSave(null);
   };
 
   const exportData = () => {
@@ -526,6 +629,14 @@ export default function App() {
     return { prs: 0, missed: 0 };
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#050505]">
+        <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-md mx-auto min-h-screen pt-12 pb-32 px-6 relative">
       {/* Background decoration */}
@@ -562,10 +673,45 @@ export default function App() {
             </div>
           </motion.div>
         )}
+
+        {/* REST TIMER */}
+        {restTimer !== null && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-32 left-4 right-4 z-[150] flex justify-center pointer-events-none"
+          >
+            <div className="bg-[#0a0a0a]/90 backdrop-blur-xl border border-brand-primary/20 p-4 px-6 rounded-[2rem] shadow-[0_10px_40px_-10px_rgba(244,114,182,0.3)] flex items-center gap-4 pointer-events-auto">
+              <div className="w-10 h-10 rounded-full border-2 border-brand-primary/30 flex items-center justify-center relative">
+                 <motion.div 
+                    className="absolute inset-0 border-2 border-brand-primary rounded-full border-t-transparent"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                 />
+                 <div className="w-4 h-4 bg-brand-primary rounded-sm shadow-[0_0_10px_rgba(244,114,182,0.5)] animate-pulse" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black uppercase tracking-widest text-brand-primary">
+                  Descanso HIT
+                </span>
+                <span className="text-3xl font-black font-mono tracking-tighter text-white leading-none">
+                  {Math.floor(restTimer / 60)}:{(restTimer % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+              <button
+                 onClick={() => setRestTimer(null)}
+                 className="ml-4 w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-white flex items-center justify-center transition-colors"
+                >
+                  <X size={20} />
+              </button>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       <AnimatePresence mode="wait">
-        {!activeWorkoutId && !showHistory && (
+        {!activeWorkoutId && !showHistory && !editingWorkout && (
           <motion.div
             key="home"
             initial={{ opacity: 0, y: 30 }}
@@ -583,14 +729,33 @@ export default function App() {
                 >
                   <span className="w-8 h-1 bg-brand-primary rounded-full" />
                   <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
-                    Peak Performance
+                    {user?.displayName ? `Treinador: ${user.displayName}` : 'Alto Rendimento'}
                   </span>
                 </motion.div>
                 <h1 className="text-5xl font-black italic tracking-tighter leading-none">
-                  PR <span className="text-brand-primary">TRACKER</span>
+                  REGISTRO <span className="text-brand-primary">DE PR</span>
                 </h1>
               </div>
               <div className="flex gap-2 mb-1">
+                {user ? (
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => signOut(auth)}
+                    className="p-3 bg-zinc-900 border border-zinc-800 rounded-2xl hover:bg-zinc-800 transition-colors text-rose-500/80"
+                  >
+                    <LogOut size={20} />
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={login}
+                    className="p-3 bg-brand-primary/10 border border-brand-primary/30 text-brand-primary rounded-2xl hover:bg-brand-primary/20 transition-colors"
+                  >
+                    <LogIn size={20} />
+                  </motion.button>
+                )}
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
@@ -611,7 +776,7 @@ export default function App() {
               animate="show"
             >
               {workouts.map((workout, idx) => (
-                <motion.button
+                <motion.div
                   key={workout.id}
                   variants={{
                     hidden: { opacity: 0, y: 20 },
@@ -620,10 +785,23 @@ export default function App() {
                   whileHover={{ y: -4 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => startWorkout(workout)}
-                  className="glass-card p-8 text-left hover:border-brand-primary/30 transition-all group relative overflow-hidden"
+                  role="button"
+                  tabIndex={0}
+                  className="glass-card p-8 text-left hover:border-brand-primary/30 transition-all group relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-brand-primary/50 cursor-pointer text-left block w-full"
                 >
                   <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity rotate-12">
                     <Dumbbell size={120} weight="fill" />
+                  </div>
+                  <div className="absolute top-4 right-4 z-20">
+                    <button
+                      onClick={(e) => {
+                         e.stopPropagation();
+                         setEditingWorkout(workout);
+                      }}
+                      className="p-2 rounded-full bg-zinc-900/80 border border-zinc-800 text-zinc-400 hover:text-brand-primary hover:bg-black transition-colors"
+                    >
+                       <Edit2 size={16} />
+                    </button>
                   </div>
                   <div className="relative z-10">
                     <span className="text-[10px] font-black text-brand-primary uppercase tracking-[0.2em] block mb-2">
@@ -648,7 +826,7 @@ export default function App() {
                       </p>
                     </div>
                   </div>
-                </motion.button>
+                </motion.div>
               ))}
             </motion.div>
 
@@ -687,13 +865,193 @@ export default function App() {
             >
               <div className="inline-flex items-center gap-2 px-4 py-2 border border-zinc-900 rounded-full bg-[#030303]">
                 <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.3em]">
-                  CRAFTED BY
+                  DESENVOLVIDO POR
                 </span>
                 <span className="text-[10px] font-black text-brand-primary uppercase tracking-[0.2em]">
                   MATEUS
                 </span>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+
+        {editingWorkout && (
+          <motion.div
+            key="editing"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="space-y-6 pb-20"
+          >
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setEditingWorkout(null)}
+                  className="w-10 h-10 bg-zinc-900 rounded-full flex items-center justify-center hover:bg-zinc-800"
+                >
+                  <ChevronRight size={20} className="rotate-180" />
+                </button>
+                <div>
+                   <h2 className="text-2xl font-black italic tracking-tighter uppercase leading-none">
+                     Editar <span className="text-brand-primary">{editingWorkout.dayName}</span>
+                   </h2>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+               {editingWorkout.exercises.map((ex, exIdx) => (
+                  <div key={ex.id} className="glass-card p-4 flex items-center justify-between group">
+                     <div className="flex items-center gap-4">
+                        <MovementIcon name={ex.name} index={exIdx + 1} />
+                        <div>
+                           <h4 className="font-black italic uppercase text-lg leading-tight">{ex.name}</h4>
+                           <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Alvo: {ex.targetReps} reps</p>
+                        </div>
+                     </div>
+                     <button
+                        onClick={async () => {
+                           if(confirm(`Remover ${ex.name}?`)) {
+                              const newWorkouts = workouts.map(w => {
+                                 if(w.id === editingWorkout.id) {
+                                    return { ...w, exercises: w.exercises.filter(e => e.id !== ex.id) };
+                                 }
+                                 return w;
+                              });
+                              setWorkouts(newWorkouts);
+                              setEditingWorkout({ ...editingWorkout, exercises: editingWorkout.exercises.filter(e => e.id !== ex.id) });
+
+                              if (user) {
+                                 try {
+                                    const updatedWorkout = newWorkouts.find(w => w.id === editingWorkout.id);
+                                    if (updatedWorkout) {
+                                       await setDoc(doc(db, `users/${user.uid}/workouts`, editingWorkout.id), { 
+                                          ...updatedWorkout, 
+                                          userId: user.uid, 
+                                          updatedAt: new Date().toISOString() 
+                                       }, { merge: true });
+                                    }
+                                 } catch (e) {
+                                    console.error("Erro ao remover exercício no Firestore", e);
+                                 }
+                              }
+                           }
+                        }}
+                        className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 text-rose-500/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/20 flex items-center justify-center transition-all"
+                     >
+                        <Trash2 size={16} />
+                     </button>
+                  </div>
+               ))}
+               {isAddingEx ? (
+                  <div className="glass-card p-6 space-y-4 border-zinc-800/50">
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nome do Exercício</label>
+                        <input 
+                           autoFocus
+                           type="text" 
+                           value={newExName}
+                           onChange={(e) => setNewExName(e.target.value)}
+                           className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm font-bold uppercase tracking-tight focus:border-brand-primary/50 focus:outline-none text-zinc-200"
+                           placeholder="Ex: Supino Inclinado"
+                        />
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Meta Reps</label>
+                           <input 
+                              type="number" 
+                              value={newExTarget}
+                              onChange={(e) => setNewExTarget(parseInt(e.target.value) || 0)}
+                              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm font-bold focus:border-brand-primary/50 focus:outline-none text-zinc-200"
+                           />
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Carga Inicial (KG)</label>
+                           <input 
+                              type="number" 
+                              value={newExPr}
+                              onChange={(e) => setNewExPr(parseInt(e.target.value) || 0)}
+                              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm font-bold focus:border-brand-primary/50 focus:outline-none text-zinc-200"
+                           />
+                        </div>
+                     </div>
+                     <div className="flex gap-2 pt-2">
+                        <button 
+                           onClick={() => setIsAddingEx(false)}
+                           className="flex-1 py-3 bg-zinc-900 text-zinc-500 font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition-colors"
+                        >
+                           Cancelar
+                        </button>
+                        <button 
+                           onClick={async () => {
+                              if (!newExName) return;
+                              
+                              const newEx: Exercise = {
+                                 id: crypto.randomUUID(),
+                                 name: newExName,
+                                 targetReps: newExTarget,
+                                 increment: 1,
+                                 prWeight: newExPr,
+                                 lastWeight: 0,
+                                 lastReps: 0
+                              };
+                              
+                              const newWorkouts = workouts.map(w => {
+                                 if(w.id === editingWorkout.id) {
+                                    return { ...w, exercises: [...w.exercises, newEx] };
+                                 }
+                                 return w;
+                              });
+
+                              setWorkouts(newWorkouts);
+                              setEditingWorkout({ ...editingWorkout, exercises: [...editingWorkout.exercises, newEx] });
+                              
+                              if (user) {
+                                 try {
+                                    const updatedWorkout = newWorkouts.find(w => w.id === editingWorkout.id);
+                                    if (updatedWorkout) {
+                                       await setDoc(doc(db, `users/${user.uid}/workouts`, editingWorkout.id), { 
+                                          ...updatedWorkout, 
+                                          userId: user.uid, 
+                                          updatedAt: new Date().toISOString() 
+                                       }, { merge: true });
+                                    }
+                                 } catch (e) {
+                                    console.error("Erro ao salvar exercício no Firestore", e);
+                                 }
+                              }
+
+                              setIsAddingEx(false);
+                              setNewExName("");
+                              setNewExTarget(8);
+                              setNewExPr(20);
+                           }}
+                           className="flex-1 py-3 bg-brand-primary text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all"
+                        >
+                           Salvar
+                        </button>
+                     </div>
+                  </div>
+               ) : (
+                  <button
+                     onClick={() => setIsAddingEx(true)}
+                     className="w-full py-4 border-2 border-dashed border-zinc-800 rounded-[2rem] text-zinc-500 uppercase font-black text-xs tracking-widest flex items-center justify-center gap-2 hover:border-brand-primary/50 hover:text-brand-primary hover:bg-brand-primary/5 transition-all"
+                  >
+                     <Plus size={16} /> Adicionar Exercício
+                  </button>
+               )}
+            </div>
+            
+            <div className="pt-8">
+               <button 
+                  onClick={() => setEditingWorkout(null)}
+                  className="w-full py-4 bg-white text-zinc-950 font-black rounded-[2rem] text-sm uppercase tracking-widest"
+               >
+                  Concluir Edição
+               </button>
+            </div>
           </motion.div>
         )}
 
@@ -813,14 +1171,18 @@ export default function App() {
             <div className="sticky top-6 z-50 glass-card p-4 flex items-center justify-between mb-12 shadow-2xl shadow-black">
               <button
                 onClick={() => {
-                  if (confirm("Abortar treino? Dados atuais serão perdidos.")) {
+                  if (showAbortConfirm) {
                     setActiveWorkoutId(null);
                     setCurrentSession(null);
+                    setShowAbortConfirm(false);
+                  } else {
+                    setShowAbortConfirm(true);
+                    setTimeout(() => setShowAbortConfirm(false), 3000);
                   }
                 }}
-                className="text-zinc-500 text-[10px] font-black uppercase tracking-widest px-4"
+                className={`text-[10px] font-black uppercase tracking-widest px-4 transition-colors ${showAbortConfirm ? 'text-rose-500' : 'text-zinc-500'}`}
               >
-                Sair
+                {showAbortConfirm ? "Certeza?" : "Sair"}
               </button>
               <div className="text-center">
                 <h2 className="text-lg font-black italic tracking-tighter uppercase text-brand-primary leading-none">
@@ -831,7 +1193,7 @@ export default function App() {
                 </p>
               </div>
               <button
-                onClick={finishWorkout}
+                onClick={previewSummary}
                 className="bg-white text-zinc-950 text-[10px] px-5 py-2.5 rounded-xl font-black uppercase tracking-widest"
               >
                 Finalizar
@@ -868,7 +1230,7 @@ export default function App() {
                         <div className="inner-glass px-3 py-1.5 flex items-center gap-2 border-brand-primary/20 bg-brand-primary/10">
                           <Target size={14} className="text-brand-primary" />
                           <span className="text-[10px] font-black uppercase tracking-widest text-brand-primary">
-                            META: {exercise.targetReps} REPS
+                            META: {exercise.targetReps} REPETIÇÕES
                           </span>
                         </div>
                       </div>
@@ -895,7 +1257,7 @@ export default function App() {
                             >
                               {set.type === "warmup"
                                 ? `AQ${setIdx + 1}`
-                                : `WORK`}
+                                : `SÉRIE`}
                             </span>
                           </div>
 
@@ -929,7 +1291,7 @@ export default function App() {
                                 className="w-full bg-[#0a0a0a] text-center py-5 rounded-2xl font-mono text-2xl font-black focus:ring-2 focus:ring-brand-primary/40 transition-all placeholder:text-zinc-800"
                               />
                               <span className="absolute bottom-2 right-4 text-[8px] font-black text-zinc-700 uppercase">
-                                REPS
+                                REPETIÇÕES
                               </span>
                             </div>
                           </div>
@@ -941,7 +1303,7 @@ export default function App() {
                                 completed: !set.completed,
                               })
                             }
-                            className={`w-14 h-14 flex items-center justify-center rounded-2xl transition-all ${
+                            className={`w-14 h-14 flex items-center justify-center rounded-2xl transition-all shrink-0 ${
                               set.completed
                                 ? "bg-brand-primary text-white shadow-lg shadow-brand-primary/20"
                                 : "bg-zinc-800 text-zinc-600"
@@ -953,9 +1315,35 @@ export default function App() {
                               <div className="w-6 h-6 border-2 border-zinc-700 rounded-full" />
                             )}
                           </motion.button>
+                          
+                          {/* Remove Set Button */}
+                          <motion.button
+                            whileTap={{ scale: 0.8 }}
+                            onClick={() => removeSet(exercise.id, set.id)}
+                            className="w-10 h-14 flex items-center justify-center rounded-2xl bg-zinc-900 border border-zinc-900 text-zinc-600 hover:text-rose-500 hover:bg-zinc-800 transition-all shrink-0"
+                          >
+                            <X size={16} className="stroke-[2.5]" />
+                          </motion.button>
                         </motion.div>
                       ))}
                     </div>
+
+                    {/* Add Set Buttons */}
+                    <div className="flex gap-2 justify-center mt-4 pt-2">
+                      <button 
+                        onClick={() => addSet(exercise.id, "warmup")}
+                        className="px-4 py-2 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900 transition-colors"
+                      >
+                        + Aquecimento
+                      </button>
+                      <button 
+                        onClick={() => addSet(exercise.id, "work")}
+                        className="px-4 py-2 rounded-xl bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-[10px] font-black uppercase tracking-widest hover:bg-brand-primary/20 transition-colors"
+                      >
+                        + Série
+                      </button>
+                    </div>
+
                   </motion.div>
                 );
               })}
@@ -973,9 +1361,9 @@ export default function App() {
           >
             <header className="mb-8 flex justify-between items-center mt-4">
               <h2 className="text-4xl font-black italic tracking-tighter uppercase leading-none">
-                WORKOUT
+                TREINO
                 <br />
-                <span className="text-brand-primary">DONE</span>
+                <span className="text-brand-primary">FINALIZADO</span>
               </h2>
               <motion.button
                 whileHover={{ rotate: 90 }}
@@ -1002,7 +1390,7 @@ export default function App() {
                   {getSummaryStats().missed}
                 </span>
                 <span className="text-[9px] font-black text-zinc-500/50 uppercase tracking-[0.2em] text-center">
-                  REPETIÇÕES
+                  SEM PROGRESSO
                 </span>
               </div>
             </div>
@@ -1016,7 +1404,7 @@ export default function App() {
                   <Zap size={16} fill="currentColor" />
                 </div>
                 <h3 className="text-[11px] sm:text-sm font-black uppercase tracking-[0.1em] text-brand-secondary">
-                  AI COACH ANALYTICS
+                  ANÁLISE DO COACH IA
                 </h3>
               </div>
 
@@ -1038,7 +1426,7 @@ export default function App() {
 
             <div className="space-y-4 mb-16">
               <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] ml-2">
-                DATA BREAKDOWN
+                DETALHAMENTO DO TREINO
               </h4>
               {currentSession?.logs.map((log) => {
                 const ex = activeWorkout?.exercises.find(
@@ -1065,8 +1453,8 @@ export default function App() {
                       <p className="text-[10px] font-mono text-zinc-500 mt-1 uppercase">
                         {bestSet
                           ? `${bestSet.weight}KG × ${bestSet.reps}`
-                          : "DNP"}{" "}
-                        <span className="mx-2">|</span> TARGET: {ex?.targetReps}
+                          : "N/A"}{" "}
+                        <span className="mx-2">|</span> META: {ex?.targetReps}
                       </p>
                     </div>
                     {success ? (
@@ -1092,14 +1480,24 @@ export default function App() {
               })}
             </div>
 
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={closeSummary}
-              className="mt-auto w-full py-6 bg-white text-zinc-950 font-black rounded-[2rem] text-2xl shadow-2xl shadow-brand-primary/20 mb-8"
-            >
-              FECHAR RELATÓRIO
-            </motion.button>
+            <div className="mt-auto grid grid-cols-2 gap-4 mb-8">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={closeSummary}
+                className="w-full py-6 bg-zinc-900 border border-zinc-800 text-zinc-300 font-black rounded-3xl text-sm uppercase tracking-widest shadow-xl"
+              >
+                VOLTAR AO TREINO
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={saveAndCloseWorkout}
+                className="w-full py-6 bg-brand-primary text-zinc-950 font-black rounded-3xl text-sm uppercase tracking-widest shadow-xl shadow-brand-primary/20"
+              >
+                SALVAR E SAIR
+              </motion.button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1130,7 +1528,7 @@ export default function App() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.9 }}
-              onClick={finishWorkout}
+              onClick={previewSummary}
               className="bg-white text-zinc-950 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all"
             >
               SALVAR
