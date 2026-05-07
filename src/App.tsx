@@ -23,8 +23,6 @@ import {
 import { INITIAL_WORKOUTS } from './constants';
 import { WorkoutDay, ExerciseSet, TrainingSession, Exercise } from './types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 export default function App() {
   const [workouts, setWorkouts] = useState<WorkoutDay[]>(() => {
     const saved = localStorage.getItem('pr_tracker_workouts');
@@ -90,6 +88,13 @@ export default function App() {
     setIsAiLoading(true);
     setAiFeedback('');
     try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === 'undefined') {
+        setAiFeedback('Coach IA indisponível: Chave da API GEMINI_API_KEY não configurada no ambiente (Vercel). Mas continue treinando pesado!');
+        return;
+      }
+      
+      const ai = new GoogleGenAI({ apiKey });
       const summaryText = session.logs.map(log => {
         const ex = exercises.find(e => e.id === log.exerciseId);
         const workSets = log.sets.filter(s => s.type === 'work' && s.completed);
