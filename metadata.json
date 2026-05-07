@@ -1,6 +1,6 @@
 {
-  "name": "PR Tracker - High Intensity",
-  "description": "App de treino focado em progressão de carga (PR) com divisão Upper/Lower e lógica de 2 aquecimentos + 2 séries de trabalho.",
+  "name": "Registro de Recordes - HIT",
+  "description": "App de treino focado em progressão de carga (Recordes) com divisão Upper/Lower e lógica de 2 aquecimentos e séries de trabalho pesadas.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

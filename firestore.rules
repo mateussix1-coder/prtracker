@@ -7,7 +7,7 @@ service cloud.firestore {
     }
 
     // Primitive Helpers
-    function isSignedIn() { return request.auth != null; }
+    function isSignedIn() { return request.auth != null && request.auth.token.email_verified == true; }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
@@ -34,16 +34,21 @@ service cloud.firestore {
           && data.dayName is string && data.dayName.size() <= 100
           && data.title is string && data.title.size() <= 200
           && data.userId == userId
-          && data.exercises is list && data.exercises.size() <= 100
-          && (data.get('createdAt', request.time) == request.time)
-          && (data.get('updatedAt', request.time) == request.time);
+          && data.exercises is list && data.exercises.size() <= 100;
     }
     
     match /users/{userId}/workouts/{workoutId} {
       allow get: if isOwner(userId) && isValidId(workoutId);
       allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidId(workoutId) && isValidWorkout(incoming(), userId) && incoming().createdAt == request.time;
-      allow update: if isOwner(userId) && isValidId(workoutId) && isValidWorkout(incoming(), userId) && incoming().updatedAt == request.time && incoming().id == existing().id && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt && incoming().diff(existing()).affectedKeys().hasOnly(['exercises', 'dayName', 'title', 'updatedAt']);
+      allow create: if isOwner(userId) && isValidId(workoutId) && isValidWorkout(incoming(), userId) 
+                    && incoming().createdAt == request.time 
+                    && incoming().updatedAt == request.time;
+      allow update: if isOwner(userId) && isValidId(workoutId) && isValidWorkout(incoming(), userId) 
+                    && incoming().updatedAt == request.time 
+                    && incoming().id == existing().id 
+                    && incoming().userId == existing().userId 
+                    && incoming().createdAt == existing().createdAt 
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['exercises', 'dayName', 'title', 'updatedAt']);
       allow delete: if isOwner(userId) && isValidId(workoutId);
     }
 
@@ -54,14 +59,15 @@ service cloud.firestore {
           && data.workoutId is string && data.workoutId.size() <= 128
           && data.userId == userId
           && data.date is string && data.date.size() <= 100
-          && data.logs is list && data.logs.size() <= 100
-          && (data.get('createdAt', request.time) == request.time);
+          && data.logs is list && data.logs.size() <= 100;
     }
 
     match /users/{userId}/history/{sessionId} {
       allow get: if isOwner(userId) && isValidId(sessionId);
       allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidId(sessionId) && isValidSession(incoming(), userId) && incoming().createdAt == request.time && exists(/databases/$(database)/documents/users/$(userId)/workouts/$(incoming().workoutId));
+      allow create: if isOwner(userId) && isValidId(sessionId) && isValidSession(incoming(), userId) 
+                    && incoming().createdAt == request.time 
+                    && exists(/databases/$(database)/documents/users/$(userId)/workouts/$(incoming().workoutId));
       allow delete: if isOwner(userId) && isValidId(sessionId);
     }
   }

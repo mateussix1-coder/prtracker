@@ -6,7 +6,54 @@ import { INITIAL_WORKOUTS } from "./constants";
 import { WorkoutDay, ExerciseSet, TrainingSession, Exercise } from "./types";
 import { auth, db } from "./firebase";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from "firebase/auth";
-import { collection, doc, setDoc, getDocs, getDoc } from "firebase/firestore";
+import { collection, doc, setDoc, getDocs, getDoc, serverTimestamp } from "firebase/firestore";
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 const MovementIcon = ({ name, index }: { name: string, index: number }) => {
   const n = name.toLowerCase();
@@ -181,18 +228,21 @@ export default function App() {
       if (u) {
         // sync from firestore
         try {
-          const wSnapshot = await getDocs(collection(db, `users/${u.uid}/workouts`));
+          const wPath = `users/${u.uid}/workouts`;
+          const hPath = `users/${u.uid}/history`;
+
+          const wSnapshot = await getDocs(collection(db, wPath)).catch(e => handleFirestoreError(e, OperationType.LIST, wPath));
           const wList = wSnapshot.docs.map(doc => doc.data() as WorkoutDay);
           if (wList.length > 0) {
             setWorkouts(wList);
           } else {
              // Create default ones in firestore
              for (const w of INITIAL_WORKOUTS) {
-               await setDoc(doc(db, `users/${u.uid}/workouts`, w.id), { ...w, userId: u.uid, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+               await setDoc(doc(db, wPath, w.id), { ...w, userId: u.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }).catch(e => handleFirestoreError(e, OperationType.WRITE, `${wPath}/${w.id}`));
              }
           }
           
-          const hSnapshot = await getDocs(collection(db, `users/${u.uid}/history`));
+          const hSnapshot = await getDocs(collection(db, hPath)).catch(e => handleFirestoreError(e, OperationType.LIST, hPath));
           const hList = hSnapshot.docs.map(doc => doc.data() as TrainingSession).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           if (hList.length > 0) {
             setHistory(hList);
@@ -465,7 +515,7 @@ export default function App() {
         .join("\n");
 
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: `Você é um Coach de Musculação estilo "Tóxico/Sarcástico" focado em HIT/Heavy Duty. 
         Analise o treino de hoje focado em progressão de cargas e baixo volume.
         O usuário bateu ${prsBatidos} PRs (Recordes Pessoais/Metas) hoje.
@@ -574,10 +624,14 @@ export default function App() {
          try {
            // Save modified workouts
            for (const w of pendingSave.newWorkouts) {
-             await setDoc(doc(db, `users/${user.uid}/workouts`, w.id), { ...w, userId: user.uid, updatedAt: new Date().toISOString() }, { merge: true });
+             const wPath = `users/${user.uid}/workouts/${w.id}`;
+             await setDoc(doc(db, `users/${user.uid}/workouts`, w.id), { ...w, userId: user.uid, updatedAt: serverTimestamp() }, { merge: true })
+               .catch(e => handleFirestoreError(e, OperationType.WRITE, wPath));
            }
            // Save session
-           await setDoc(doc(db, `users/${user.uid}/history`, pendingSave.session.id), { ...pendingSave.session, userId: user.uid, createdAt: new Date().toISOString(), workoutId: pendingSave.session.workoutId });
+           const sPath = `users/${user.uid}/history/${pendingSave.session.id}`;
+           await setDoc(doc(db, `users/${user.uid}/history`, pendingSave.session.id), { ...pendingSave.session, userId: user.uid, createdAt: serverTimestamp(), workoutId: pendingSave.session.workoutId })
+             .catch(e => handleFirestoreError(e, OperationType.WRITE, sPath));
          } catch (e) {
            console.error("Error saving to firestore", e);
          }
@@ -733,7 +787,7 @@ export default function App() {
                   </span>
                 </motion.div>
                 <h1 className="text-5xl font-black italic tracking-tighter leading-none">
-                  REGISTRO <span className="text-brand-primary">DE PR</span>
+                  REGISTRO <span className="text-brand-primary">DE RECORDES</span>
                 </h1>
               </div>
               <div className="flex gap-2 mb-1">
@@ -926,11 +980,12 @@ export default function App() {
                                  try {
                                     const updatedWorkout = newWorkouts.find(w => w.id === editingWorkout.id);
                                     if (updatedWorkout) {
+                                       const wPath = `users/${user.uid}/workouts/${editingWorkout.id}`;
                                        await setDoc(doc(db, `users/${user.uid}/workouts`, editingWorkout.id), { 
                                           ...updatedWorkout, 
                                           userId: user.uid, 
-                                          updatedAt: new Date().toISOString() 
-                                       }, { merge: true });
+                                          updatedAt: serverTimestamp() 
+                                       }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, wPath));
                                     }
                                  } catch (e) {
                                     console.error("Erro ao remover exercício no Firestore", e);
@@ -1012,11 +1067,12 @@ export default function App() {
                                  try {
                                     const updatedWorkout = newWorkouts.find(w => w.id === editingWorkout.id);
                                     if (updatedWorkout) {
+                                       const wPath = `users/${user.uid}/workouts/${editingWorkout.id}`;
                                        await setDoc(doc(db, `users/${user.uid}/workouts`, editingWorkout.id), { 
                                           ...updatedWorkout, 
                                           userId: user.uid, 
-                                          updatedAt: new Date().toISOString() 
-                                       }, { merge: true });
+                                          updatedAt: serverTimestamp() 
+                                       }, { merge: true }).catch(e => handleFirestoreError(e, OperationType.WRITE, wPath));
                                     }
                                  } catch (e) {
                                     console.error("Erro ao salvar exercício no Firestore", e);
@@ -1116,7 +1172,7 @@ export default function App() {
                         </p>
                       </div>
                       <div className="p-2 px-3 bg-zinc-800 rounded-lg text-[10px] font-black text-brand-primary">
-                        PR
+                        HISTÓRICO
                       </div>
                     </div>
                     <div className="grid grid-cols-1 gap-3">
@@ -1224,7 +1280,7 @@ export default function App() {
                         <div className="inner-glass px-3 py-1.5 flex items-center gap-2 border-amber-500/20 bg-amber-500/10">
                           <Trophy size={14} className="text-amber-400" />
                           <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">
-                            PR: {exercise.prWeight}KG
+                            RECORDE: {exercise.prWeight}KG
                           </span>
                         </div>
                         <div className="inner-glass px-3 py-1.5 flex items-center gap-2 border-brand-primary/20 bg-brand-primary/10">
@@ -1381,7 +1437,7 @@ export default function App() {
                   {getSummaryStats().prs}
                 </span>
                 <span className="text-[9px] font-black text-emerald-500/50 uppercase tracking-[0.2em] text-center">
-                  PRs BATIDOS
+                  RECORDES BATIDOS
                 </span>
               </div>
               <div className="glass-card p-6 flex flex-col items-center justify-center gap-2 border-zinc-800 bg-zinc-900/10">
